@@ -1,15 +1,7 @@
-const express = require('express');
-const app = express();
 const fs = require('fs'); // Aggiungi questo in alto
 
 // Rotta fittizia per il Web Service
 app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
-
-// Apertura della porta
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server in ascolto sulla porta ${PORT}`);
-});
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
@@ -282,17 +274,13 @@ client.on('message', async (message) => {
 
 // Avvia il bot
 client.initialize();
+const express = require('express');
+const app = express();
+// Rotta fittizia per il Web Service
+app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
 
-// **Aggiungi qui il server Express per visualizzare il QR Code**
-app.get('/qr', (req, res) => {
-    try {
-        const qrCode = fs.readFileSync('qr-code.txt', 'utf8');
-        res.send(`<pre>${qrCode}</pre>`);
-    } catch (error) {
-        res.status(500).send('QR Code non trovato.');
-    }
-});
-
+// Apertura della porta
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
