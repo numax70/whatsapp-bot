@@ -5,7 +5,7 @@ const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
-const os = require('os'); // Per monitorare risorse di sistema
+const admin = require('firebase-admin'); // Firebase Admin SDK
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale');
 
@@ -13,6 +13,14 @@ const { it } = require('date-fns/locale');
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
+
+// Firebase Admin SDK
+const serviceAccount = require('./firebase-adminsdk.json'); // File di configurazione Firebase
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app/', // URL del database
+});
+const db = admin.database();
 
 // Stato utenti
 const userStates = {};
@@ -27,6 +35,21 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+// Funzioni Firebase per il calendario
+async function getAvailableSlots(date) {
+    const ref = db.ref(`calendario/${date}`);
+    const snapshot = await ref.once('value');
+    return snapshot.val();
+}
+
+async function updateAvailableSlots(date, time) {
+    const ref = db.ref(`calendario/${date}`);
+    const snapshot = await ref.once('value');
+    const slots = snapshot.val() || [];
+    const updatedSlots = slots.filter((slot) => slot !== time);
+    await ref.set(updatedSlots);
+}
+
 // Funzione per inviare email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
@@ -37,14 +60,12 @@ async function sendEmailNotification(bookingData) {
         - Data: ${bookingData.date}
         - Ora: ${bookingData.time}
     `;
-
     const mailOptions = {
         from: EMAIL_USER,
         to: 'siselcatania@gmail.com',
         subject: 'Nuova Prenotazione lezione Pilates',
         text: emailBody,
     };
-
     try {
         console.log('Invio email...');
         const result = await transporter.sendMail(mailOptions);
@@ -54,7 +75,7 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-// Funzione per inviare notifica al proprietario
+// Funzione per inviare notifiche e promemoria
 async function sendFinalNotification(client, bookingData) {
     const summary = `
         Prenotazione completata:
@@ -64,7 +85,6 @@ async function sendFinalNotification(client, bookingData) {
         - Data: ${bookingData.date}
         - Ora: ${bookingData.time}
     `;
-
     try {
         console.log(`Invio notifica finale a ${OWNER_PHONE}:\n${summary}`);
         await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:\n${summary}`);
@@ -74,7 +94,6 @@ async function sendFinalNotification(client, bookingData) {
     }
 }
 
-// Funzione per inviare promemoria all'utente
 async function sendUserReminder(client, chatId, bookingData) {
     const summary = `
 📋 *Promemoria della tua Prenotazione*
@@ -87,7 +106,6 @@ async function sendUserReminder(client, chatId, bookingData) {
 ──────────────────────
 Grazie per aver prenotato con noi la tua lezione gratuita!
     `;
-
     try {
         console.log(`Invio promemoria all'utente ${chatId}:\n${summary}`);
         await client.sendMessage(chatId, summary);
@@ -102,7 +120,6 @@ function validateAndFormatDate(input) {
     const today = new Date();
     const yearEnd = endOfYear(today);
     const formats = ['dd MMMM yyyy', 'dd/MM/yyyy'];
-
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
         if (isValid(parsedDate) && isFuture(parsedDate) && isWithinInterval(parsedDate, { start: today, end: yearEnd })) {
@@ -147,7 +164,6 @@ app.get('/qr', (req, res) => {
     }
 });
 
-// Endpoint per UptimeRobot
 app.get('/ping', (req, res) => {
     console.log('Ping ricevuto da UptimeRobot.');
     res.status(200).send('OK');
@@ -159,14 +175,6 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
-
-// Monitoraggio risorse
-setInterval(() => {
-    const memoryUsage = process.memoryUsage();
-    const cpuLoad = os.loadavg();
-    console.log(`RAM: ${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`CPU (1 min): ${cpuLoad[0].toFixed(2)}`);
-}, 60000); // Ogni minuto
 
 // Gestione dei messaggi
 client.on('message', async (message) => {
@@ -192,64 +200,39 @@ client.on('message', async (message) => {
     }
 
     const userState = userStates[chatId];
-
     switch (userState.step) {
-        case 'initial':
-            if (userResponse === 'sì' || userResponse === 'si') {
-                userState.step = 'ask_name';
-                await message.reply('Perfetto! Come ti chiami?');
-            } else if (userResponse === 'no') {
-                disengagedUsers.add(chatId);
-                delete userStates[chatId];
-                await message.reply('Va bene! Scrivi "prenotazione" per ricominciare.');
-            } else {
-                await message.reply('Non ho capito. Vuoi prenotare una lezione?');
-            }
-            break;
-        case 'ask_name':
-            userState.data.name = message.body.trim();
-            userState.step = 'ask_surname';
-            await message.reply('Grazie! Qual è il tuo cognome?');
-            break;
-        case 'ask_surname':
-            userState.data.surname = message.body.trim();
-            userState.step = 'ask_phone';
-            await message.reply('Inserisci il tuo numero di telefono.');
-            break;
-        case 'ask_phone':
-            const phone = message.body.replace(/\D/g, '');
-            if (phone.length >= 8 && phone.length <= 15) {
-                userState.data.phone = phone;
-                userState.step = 'ask_date';
-                await message.reply('Quale data preferisci? (Esempio: "12 Febbraio 2025").');
-            } else {
-                await message.reply('Numero di telefono non valido.');
-            }
-            break;
         case 'ask_date':
             const date = validateAndFormatDate(message.body.trim());
             if (date) {
-                userState.data.date = date;
-                userState.step = 'ask_time';
-                await message.reply('A che ora vuoi prenotare? (Formato: "14:30").');
+                const slots = await getAvailableSlots(date);
+                if (slots && slots.length > 0) {
+                    userState.data.date = date;
+                    userState.step = 'ask_time';
+                    await message.reply(`Orari disponibili per ${date}: ${slots.join(', ')}`);
+                } else {
+                    await message.reply('Nessun orario disponibile per questa data.');
+                }
             } else {
                 await message.reply('Data non valida.');
             }
             break;
+
         case 'ask_time':
-            const time = validateAndFormatTime(message.body.trim());
-            if (time) {
+            const time = message.body.trim();
+            const availableSlots = await getAvailableSlots(userState.data.date);
+            if (availableSlots && availableSlots.includes(time)) {
                 userState.data.time = time;
+                await updateAvailableSlots(userState.data.date, time);
                 await sendFinalNotification(client, userState.data);
                 await sendEmailNotification(userState.data);
                 await sendUserReminder(client, chatId, userState.data);
                 delete userStates[chatId];
                 await message.reply('Prenotazione completata!');
             } else {
-                await message.reply('Orario non valido.');
+                await message.reply('Orario non disponibile.');
             }
             break;
-        
+
         default:
             delete userStates[chatId];
             await message.reply('Errore sconosciuto. Riprova.');

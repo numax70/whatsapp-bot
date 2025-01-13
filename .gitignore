@@ -22,3 +22,6 @@ Thumbs.db
 # Render-specific cache
 /tmp/
 .cache/
+
+firebase-adminsdk.json
+
