@@ -171,13 +171,16 @@ app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
 
-// Elimina file di autenticazione esistenti
-const authPath = './.wwebjs_auth';
-if (fs.existsSync(authPath)) {
-    fs.rmSync(authPath, { recursive: true, force: true });
-    console.log('Cartella .wwebjs_auth eliminata per rigenerare il QR Code.');
-}
-
 // Avvio del bot
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
+
+// Aggiunta di log per i messaggi ricevuti
+client.on('message', async (message) => {
+    console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
+    if (message.body.toLowerCase() === 'ciao') {
+        await message.reply('Ciao! Il bot è operativo.');
+    }
+});
+
+// Inizializza il client WhatsApp
 client.initialize();
