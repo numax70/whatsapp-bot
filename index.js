@@ -1,15 +1,7 @@
 const express = require('express');
 const app = express();
-const fs = require('fs'); // Aggiungi questo in alto
-
-// Rotta fittizia per il Web Service
-app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
-// Apertura della porta
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-    console.log(`Server in ascolto sulla porta ${PORT}`);
-});
-
+const fs = require('fs');
+const path = require('path'); // Per lavorare con i percorsi dei file
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
@@ -17,9 +9,9 @@ const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = requir
 const { it } = require('date-fns/locale'); // Locale italiano
 
 // Legge le variabili d'ambiente
-const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us'; // Numero del proprietario
-const EMAIL_USER = process.env.EMAIL_USER;   // Email per l'invio
-const EMAIL_PASS = process.env.EMAIL_PASS;   // Password per l'app Gmail
+const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
+const EMAIL_USER = process.env.EMAIL_USER; // Email per l'invio
+const EMAIL_PASS = process.env.EMAIL_PASS; // Password per l'app Gmail
 
 // Stato per gli utenti
 const userStates = {};
@@ -30,7 +22,7 @@ const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: EMAIL_USER,
-        pass: EMAIL_PASS, // Password per le app
+        pass: EMAIL_PASS,
     },
 });
 
@@ -89,7 +81,7 @@ async function sendUserReminder(client, chatId, bookingData) {
 👤 Nome: ${bookingData.name}
 👥 Cognome: ${bookingData.surname}
 📞 Telefono: ${bookingData.phone}
-📅 Data rchiesta: ${bookingData.date}
+📅 Data richiesta: ${bookingData.date}
 ⏰ Orario richiesto: ${bookingData.time}
 ──────────────────────
 Grazie per aver prenotato con noi la tua lezione gratuita! Per modifiche o cancellazioni, rispondi a questo messaggio.
@@ -106,29 +98,22 @@ Grazie per aver prenotato con noi la tua lezione gratuita! Per modifiche o cance
 
 // Funzione per validare e formattare la data
 function validateAndFormatDate(input) {
-    console.log(`Tentativo di validare la data: "${input}"`);
-
     const today = new Date();
     const yearEnd = endOfYear(today);
     let parsedDate;
 
-    // Formati accettati
     const formats = ['dd MMMM yyyy', 'dd/MM/yyyy'];
 
     for (const fmt of formats) {
         parsedDate = parse(input, fmt, today, { locale: it });
 
         if (isValid(parsedDate)) {
-            // Controlla che la data sia futura e all'interno dell'anno corrente
             if (isFuture(parsedDate) && isWithinInterval(parsedDate, { start: today, end: yearEnd })) {
-                const formattedDate = format(parsedDate, 'dd/MM/yyyy');
-                console.log(`Data valida: ${formattedDate}`);
-                return formattedDate;
+                return format(parsedDate, 'dd/MM/yyyy');
             }
         }
     }
 
-    console.log('Data non valida');
     return null;
 }
 
@@ -146,140 +131,46 @@ function validateAndFormatTime(input) {
         }
     }
 
-    return null; // Orario non valido
+    return null;
 }
 
-// Crea un client di WhatsApp Web
+// Configurazione del client WhatsApp
 const client = new Client({
     authStrategy: new LocalAuth(),
 });
 
-// Mostra il QR code per connettere il bot
+// Gestione QR Code
 client.on('qr', (qr) => {
     console.log('QR Code generato. Salvataggio in corso...');
-    fs.writeFileSync('qr-code.txt', qr, (err) => {
+    const qrPath = path.join(__dirname, 'qr.png');
+    qrcode.toFile(qrPath, qr, (err) => {
         if (err) {
-            console.error('Errore nel salvataggio del QR Code:', err.message);
+            console.error('Errore durante il salvataggio del QR Code:', err.message);
         } else {
-            console.log('QR Code salvato come "qr-code.txt". Scarica questo file e usalo per visualizzarlo.');
+            console.log(`QR Code salvato come ${qrPath}`);
         }
     });
 });
 
-
-// Conferma che il bot è pronto
-client.on('ready', async () => {
-    console.log('Bot connesso a WhatsApp!');
-});
-
-// Gestione dei messaggi ricevuti
-client.on('message', async (message) => {
-    const chatId = message.from; // Identifica l'utente
-    const userResponse = message.body.trim().toLowerCase(); // Normalizza l'input
-
-    // Ignora i messaggi provenienti da OWNER_PHONE
-    if (chatId === OWNER_PHONE) return;
-
-    // Se l'utente è nella lista "disimpegnata", ascolta solo "prenotazione"
-    if (disengagedUsers.has(chatId)) {
-        if (userResponse === 'prenotazione') {
-            disengagedUsers.delete(chatId); // Rimuovi dalla lista "disimpegnata"
-            userStates[chatId] = { step: 'ask_name', data: {} }; // Riavvia il processo
-            await message.reply('Riprendiamo la prenotazione! Come ti chiami?');
-        }
-        return; // Ignora tutto il resto
-    }
-
-    // Inizializza lo stato dell'utente se non esiste
-    if (!userStates[chatId]) {
-        userStates[chatId] = { step: 'initial', data: {} };
-        console.log(`Nuova conversazione avviata con ${chatId}`);
-        await message.reply('Vuoi prenotare una lezione di Pilates ? Digita "Sì" o "No".');
-        return;
-    }
-
-    const userState = userStates[chatId];
-    console.log(`Stato corrente (${chatId}): ${userState.step}`);
-
-    switch (userState.step) {
-        case 'initial':
-            if (userResponse === 'sì' || userResponse === 'si') {
-                userState.step = 'ask_name';
-                await message.reply('Perfetto! Come ti chiami?');
-            } else if (userResponse === 'no') {
-                disengagedUsers.add(chatId); // Aggiungi alla lista "disimpegnata"
-                delete userStates[chatId]; // Cancella lo stato dell'utente
-                await message.reply(
-                    'Va bene! Se desideri prenotare una lezione in futuro, basta digitare "prenotazione".'
-                );
-            } else {
-                await message.reply('Non ho capito. Vuoi prenotare una lezione di Pilates? Digita "Sì" o "No".');
-            }
-            break;
-
-        case 'ask_name':
-            userState.data.name = message.body.trim();
-            userState.step = 'ask_surname';
-            await message.reply('Grazie! Ora scrivimi il tuo cognome.');
-            break;
-
-        case 'ask_surname':
-            userState.data.surname = message.body.trim();
-            userState.step = 'ask_phone';
-            await message.reply('Perfetto! Inserisci il tuo numero di telefono (Su questo numero riceverai la conferma successiva).');
-            break;
-
-        case 'ask_phone':
-            const phone = message.body.replace(/\D/g, '');
-            if (phone.length >= 8 && phone.length <= 15) {
-                userState.data.phone = phone;
-                userState.step = 'ask_date';
-                await message.reply('Ottimo! Quale data preferisci per la lezione ? (Esempio Formato valido: "12 Febbraio 2025").');
-            } else {
-                await message.reply('Il numero di telefono non è valido. Riprova.');
-            }
-            break;
-
-        case 'ask_date':
-            const formattedDate = validateAndFormatDate(message.body.trim());
-            if (formattedDate) {
-                userState.data.date = formattedDate;
-                userState.step = 'ask_time';
-                await message.reply('Grazie! A che ora vuoi prenotare? (Esempio formato valido: "14:30").');
-            } else {
-                await message.reply('La data non è valida. Inseriscila nel formato valido: "12 Febbraio 2025".');
-            }
-            break;
-
-        case 'ask_time':
-            const formattedTime = validateAndFormatTime(message.body.trim());
-            if (formattedTime) {
-                userState.data.time = formattedTime;
-                console.log(`Prenotazione completata per ${chatId}:`, userState.data);
-
-                // Invia notifiche finali
-                await sendFinalNotification(client, userState.data);
-                await sendEmailNotification(userState.data);
-
-                // Invia promemoria all'utente
-                await sendUserReminder(client, chatId, userState.data);
-
-                await message.reply('Grazie! La tua prenotazione è stata registrata con successo.');
-                delete userStates[chatId];
-            } else {
-                await message.reply('L\'orario non è valido. Inserisci un orario nel formato valido: "14:30".');
-            }
-            break;
-
-        default:
-            console.error(`Errore sconosciuto con lo stato: ${userState.step}`);
-            delete userStates[chatId];
-            await message.reply('Si è verificato un errore. Riprova dall\'inizio.');
-            break;
+// Server Express per visualizzare il QR Code
+app.get('/qr', (req, res) => {
+    const qrPath = path.join(__dirname, 'qr.png');
+    if (fs.existsSync(qrPath)) {
+        res.sendFile(qrPath);
+    } else {
+        res.status(404).send('QR Code non trovato. Attendi qualche istante.');
     }
 });
 
-// Avvia il bot
+// Altre rotte
+app.get('/', (req, res) => res.send('Il bot è attivo!'));
+
+// Porta di ascolto
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+    console.log(`Server in ascolto sulla porta ${PORT}`);
+});
+
+// Avvio del bot
+client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 client.initialize();
-
-
