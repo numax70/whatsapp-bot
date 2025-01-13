@@ -173,8 +173,8 @@ app.listen(PORT, () => {
 
 // Avvio del bot
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
-const authPath = './.wwebjs_auth'; // Cambiato il nome della variabile
-const fs = require('fs');
+// Usa la variabile fs già dichiarata
+const authPath = './.wwebjs_auth'; // Cambia il nome della variabile
 
 // Rimuove i file di autenticazione, se esistono
 if (fs.existsSync(authPath)) {
