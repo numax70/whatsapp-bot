@@ -173,4 +173,13 @@ app.listen(PORT, () => {
 
 // Avvio del bot
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
+const path = './.wwebjs_auth';
+const fs = require('fs');
+
+// Forza la rimozione dei file di autenticazione
+if (fs.existsSync(path)) {
+    fs.rmSync(path, { recursive: true, force: true });
+    console.log('Cartella .wwebjs_auth eliminata per rigenerare il QR Code.');
+}
+
 client.initialize();
