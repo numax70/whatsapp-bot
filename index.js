@@ -1,3 +1,15 @@
+const express = require('express');
+const app = express();
+
+// Rotta fittizia per il Web Service
+app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
+
+// Apertura della porta
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server in ascolto sulla porta ${PORT}`);
+});
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const nodemailer = require('nodemailer');
