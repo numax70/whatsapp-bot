@@ -15,7 +15,7 @@ const EMAIL_PASS = process.env.EMAIL_PASS;
 
 // Stato utenti
 const userStates = {};
-const disengagedUsers = new Set(); // Per gli utenti che hanno detto "no"
+const disengagedUsers = new Set();
 
 // Configurazione email
 const transporter = nodemailer.createTransport({
@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Funzione per inviare email
+// Funzioni per notifiche
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -53,7 +53,6 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-// Funzione per inviare notifica al proprietario
 async function sendFinalNotification(client, bookingData) {
     const summary = `
         Prenotazione completata:
@@ -65,7 +64,7 @@ async function sendFinalNotification(client, bookingData) {
     `;
 
     try {
-        console.log(`Invio notifica finale a ${OWNER_PHONE} con il messaggio:\n${summary}`);
+        console.log(`Invio notifica finale a ${OWNER_PHONE}:\n${summary}`);
         await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:\n${summary}`);
         console.log('Notifica finale inviata con successo.');
     } catch (error) {
@@ -73,7 +72,6 @@ async function sendFinalNotification(client, bookingData) {
     }
 }
 
-// Funzione per inviare promemoria all'utente
 async function sendUserReminder(client, chatId, bookingData) {
     const summary = `
 📋 *Promemoria della tua Prenotazione*
@@ -100,11 +98,10 @@ Grazie per aver prenotato con noi la tua lezione gratuita!
 function validateAndFormatDate(input) {
     const today = new Date();
     const yearEnd = endOfYear(today);
-    let parsedDate;
-
     const formats = ['dd MMMM yyyy', 'dd/MM/yyyy'];
+
     for (const fmt of formats) {
-        parsedDate = parse(input, fmt, today, { locale: it });
+        const parsedDate = parse(input, fmt, today, { locale: it });
         if (isValid(parsedDate) && isFuture(parsedDate) && isWithinInterval(parsedDate, { start: today, end: yearEnd })) {
             return format(parsedDate, 'dd/MM/yyyy');
         }
@@ -125,19 +122,15 @@ function validateAndFormatTime(input) {
     return null;
 }
 
-// Configurazione WhatsApp client
+// Configurazione WhatsApp Client
 const client = new Client({ authStrategy: new LocalAuth() });
 
-// Gestione QR Code
 client.on('qr', (qr) => {
     console.log('QR Code generato.');
     const qrPath = path.join(__dirname, 'qr.png');
     qrcode.toFile(qrPath, qr, (err) => {
-        if (err) {
-            console.error('Errore durante il salvataggio del QR Code:', err.message);
-        } else {
-            console.log(`QR Code salvato in: ${qrPath}`);
-        }
+        if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
+        else console.log(`QR Code salvato in ${qrPath}`);
     });
 });
 
@@ -158,7 +151,7 @@ app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
 
-// Gestione messaggi
+// Gestione dei messaggi
 client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
@@ -191,35 +184,31 @@ client.on('message', async (message) => {
             } else if (userResponse === 'no') {
                 disengagedUsers.add(chatId);
                 delete userStates[chatId];
-                await message.reply('Va bene! Se vuoi prenotare, digita "prenotazione".');
+                await message.reply('Va bene! Scrivi "prenotazione" per ricominciare.');
             } else {
-                await message.reply('Non ho capito. Vuoi prenotare una lezione? Digita "Sì" o "No".');
+                await message.reply('Non ho capito. Vuoi prenotare una lezione?');
             }
             break;
-
         case 'ask_name':
             userState.data.name = message.body.trim();
             userState.step = 'ask_surname';
-            await message.reply('Grazie! Ora scrivimi il tuo cognome.');
+            await message.reply('Grazie! Qual è il tuo cognome?');
             break;
-
         case 'ask_surname':
             userState.data.surname = message.body.trim();
             userState.step = 'ask_phone';
             await message.reply('Inserisci il tuo numero di telefono.');
             break;
-
         case 'ask_phone':
             const phone = message.body.replace(/\D/g, '');
             if (phone.length >= 8 && phone.length <= 15) {
                 userState.data.phone = phone;
                 userState.step = 'ask_date';
-                await message.reply('Quale data preferisci? (Formato: "12 Febbraio 2025").');
+                await message.reply('Quale data preferisci? (Esempio: "12 Febbraio 2025").');
             } else {
                 await message.reply('Numero di telefono non valido.');
             }
             break;
-
         case 'ask_date':
             const date = validateAndFormatDate(message.body.trim());
             if (date) {
@@ -230,28 +219,30 @@ client.on('message', async (message) => {
                 await message.reply('Data non valida.');
             }
             break;
-
         case 'ask_time':
             const time = validateAndFormatTime(message.body.trim());
             if (time) {
                 userState.data.time = time;
-                console.log(`Prenotazione completata: ${JSON.stringify(userState.data)}`);
                 await sendFinalNotification(client, userState.data);
                 await sendEmailNotification(userState.data);
                 await sendUserReminder(client, chatId, userState.data);
                 delete userStates[chatId];
-                await message.reply('Prenotazione completata. Grazie!');
+                await message.reply('Prenotazione completata!');
             } else {
                 await message.reply('Orario non valido.');
             }
             break;
-
         default:
-            console.error(`Stato sconosciuto: ${userState.step}`);
             delete userStates[chatId];
-            await message.reply('Si è verificato un errore.');
+            await message.reply('Errore sconosciuto. Riprova.');
             break;
     }
+});
+
+// Riconnessione Automatica
+client.on('disconnected', (reason) => {
+    console.log(`Bot disconnesso: ${reason}`);
+    client.initialize();
 });
 
 // Avvio del bot
