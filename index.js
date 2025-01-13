@@ -175,12 +175,110 @@ app.listen(PORT, () => {
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 
 // Aggiunta di log per i messaggi ricevuti
-client.on('message', async (message) => {
+/* client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     if (message.body.toLowerCase() === 'ciao') {
         await message.reply('Ciao! Il bot è operativo.');
     }
+}); */
+// Gestione dei messaggi ricevuti
+client.on('message', async (message) => {
+    const chatId = message.from;
+    const userResponse = message.body.trim().toLowerCase();
+
+    console.log(`Messaggio ricevuto da ${chatId}: ${message.body}`);
+
+    // Ignora i messaggi del proprietario
+    if (chatId === OWNER_PHONE) return;
+
+    // Se l'utente ha detto "no", riattivarlo solo se dice "prenotazione"
+    if (disengagedUsers.has(chatId)) {
+        if (userResponse === 'prenotazione') {
+            disengagedUsers.delete(chatId);
+            userStates[chatId] = { step: 'ask_name', data: {} };
+            await message.reply('Riprendiamo la prenotazione! Come ti chiami?');
+        }
+        return;
+    }
+    // Inizializza lo stato dell'utente se non esiste
+    if (!userStates[chatId]) {
+        userStates[chatId] = { step: 'initial', data: {} };
+        await message.reply('Vuoi prenotare una lezione di Pilates? Digita "Sì" o "No".');
+        return;
+    }
+
+    const userState = userStates[chatId];
+
+    // Gestione del flusso di prenotazione
+    switch (userState.step) {
+        case 'initial':
+            if (userResponse === 'sì' || userResponse === 'si') {
+                userState.step = 'ask_name';
+                await message.reply('Perfetto! Come ti chiami?');
+            } else if (userResponse === 'no') {
+                disengagedUsers.add(chatId);
+                delete userStates[chatId];
+                await message.reply('Va bene! Se desideri prenotare in futuro, scrivi "prenotazione".');
+            } else {
+                await message.reply('Non ho capito. Vuoi prenotare una lezione di Pilates? Digita "Sì" o "No".');
+            }
+            break;
+
+        case 'ask_name':
+            userState.data.name = message.body.trim();
+            userState.step = 'ask_surname';
+            await message.reply('Grazie! Ora scrivimi il tuo cognome.');
+            break;
+
+        case 'ask_surname':
+            userState.data.surname = message.body.trim();
+            userState.step = 'ask_phone';
+            await message.reply('Inserisci il tuo numero di telefono.');
+            break;
+
+        case 'ask_phone':
+            const phone = message.body.replace(/\D/g, '');
+            if (phone.length >= 8 && phone.length <= 15) {
+                userState.data.phone = phone;
+                userState.step = 'ask_date';
+                await message.reply('Quale data preferisci per la lezione? (Esempio: "12 Febbraio 2025").');
+            } else {
+                await message.reply('Il numero di telefono non è valido. Riprova.');
+            }
+            break;
+
+        case 'ask_date':
+            const date = validateAndFormatDate(message.body.trim());
+            if (date) {
+                userState.data.date = date;
+                userState.step = 'ask_time';
+                await message.reply('A che ora vuoi prenotare? (Formato: "14:30").');
+            } else {
+                await message.reply('La data non è valida. Inserisci una data futura valida.');
+            }
+            break;
+
+        case 'ask_time':
+            const time = validateAndFormatTime(message.body.trim());
+            if (time) {
+                userState.data.time = time;
+                await message.reply('La tua prenotazione è stata completata! Grazie.');
+                console.log(`Prenotazione completata:`, userState.data);
+                delete userStates[chatId];
+            } else {
+                await message.reply('L\'orario non è valido. Inserisci un orario valido (Formato: "14:30").');
+            }
+            break;
+
+        default:
+            console.error(`Stato sconosciuto: ${userState.step}`);
+            delete userStates[chatId];
+            await message.reply('Si è verificato un errore. Riprova.');
+            break;
+    }
 });
+
+
 
 // Inizializza il client WhatsApp
 client.initialize();
