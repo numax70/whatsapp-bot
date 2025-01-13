@@ -5,6 +5,7 @@ const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
+const os = require('os'); // Per monitorare risorse di sistema
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale');
 
@@ -26,7 +27,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Funzioni per notifiche
+// Funzione per inviare email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -53,6 +54,7 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
+// Funzione per inviare notifica al proprietario
 async function sendFinalNotification(client, bookingData) {
     const summary = `
         Prenotazione completata:
@@ -72,6 +74,7 @@ async function sendFinalNotification(client, bookingData) {
     }
 }
 
+// Funzione per inviare promemoria all'utente
 async function sendUserReminder(client, chatId, bookingData) {
     const summary = `
 📋 *Promemoria della tua Prenotazione*
@@ -144,12 +147,26 @@ app.get('/qr', (req, res) => {
     }
 });
 
+// Endpoint per UptimeRobot
+app.get('/ping', (req, res) => {
+    console.log('Ping ricevuto da UptimeRobot.');
+    res.status(200).send('OK');
+});
+
 app.get('/', (req, res) => res.send('Il bot è attivo!'));
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
+
+// Monitoraggio risorse
+setInterval(() => {
+    const memoryUsage = process.memoryUsage();
+    const cpuLoad = os.loadavg();
+    console.log(`RAM: ${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`CPU (1 min): ${cpuLoad[0].toFixed(2)}`);
+}, 60000); // Ogni minuto
 
 // Gestione dei messaggi
 client.on('message', async (message) => {
@@ -232,6 +249,7 @@ client.on('message', async (message) => {
                 await message.reply('Orario non valido.');
             }
             break;
+        
         default:
             delete userStates[chatId];
             await message.reply('Errore sconosciuto. Riprova.');
