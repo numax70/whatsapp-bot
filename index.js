@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
-const fs = require('fs');
-const path = require('path'); // Per lavorare con i percorsi dei file
+const fs = require('fs'); // Modulo per lavorare con il file system
+const path = require('path'); // Modulo per gestire i percorsi
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
@@ -171,16 +171,13 @@ app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
 
-// Avvio del bot
-client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
-// Usa la variabile fs già dichiarata
-const authPath = './.wwebjs_auth'; // Cambia il nome della variabile
-
-// Rimuove i file di autenticazione, se esistono
+// Elimina file di autenticazione esistenti
+const authPath = './.wwebjs_auth';
 if (fs.existsSync(authPath)) {
     fs.rmSync(authPath, { recursive: true, force: true });
     console.log('Cartella .wwebjs_auth eliminata per rigenerare il QR Code.');
 }
 
-
+// Avvio del bot
+client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 client.initialize();
