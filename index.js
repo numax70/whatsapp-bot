@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const fs = require('fs'); // Aggiungi questo in alto
 
 // Rotta fittizia per il Web Service
 app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
@@ -157,11 +158,11 @@ const client = new Client({
 // Mostra il QR code per connettere il bot
 client.on('qr', (qr) => {
     console.log('QR Code generato. Salvataggio in corso...');
-    qrcode.toFile('qr-code.png', qr, (err) => {
+    fs.writeFileSync('qr-code.txt', qr, (err) => {
         if (err) {
             console.error('Errore nel salvataggio del QR Code:', err.message);
         } else {
-            console.log('QR Code salvato come "qr-code.png". Scaricalo da Render.');
+            console.log('QR Code salvato come "qr-code.txt". Scarica questo file e usalo per visualizzarlo.');
         }
     });
 });
