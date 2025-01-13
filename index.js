@@ -4,8 +4,10 @@ const nodemailer = require('nodemailer');
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale'); // Locale italiano
 
-// Numero WhatsApp del proprietario che riceverà la notifica finale
-const OWNER_PHONE = '393479056597@c.us'; // Numero corretto del proprietario
+// Legge le variabili d'ambiente
+const OWNER_PHONE = process.env.OWNER_PHONE; // Numero del proprietario
+const EMAIL_USER = process.env.EMAIL_USER;   // Email per l'invio
+const EMAIL_PASS = process.env.EMAIL_PASS;   // Password per l'app Gmail
 
 // Stato per gli utenti
 const userStates = {};
@@ -15,8 +17,8 @@ const disengagedUsers = new Set(); // Per gestire utenti che hanno detto "no"
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'webdesignsolutionct@gmail.com',
-        pass: 'tuxx kebg teln ahph', // Password per le app
+        user: EMAIL_USER,
+        pass: EMAIL_PASS, // Password per le app
     },
 });
 
@@ -32,9 +34,9 @@ async function sendEmailNotification(bookingData) {
     `;
 
     const mailOptions = {
-        from: 'webdesignsolutionct@gmail.com',
+        from: EMAIL_USER,
         to: 'siselcatania@gmail.com',
-        subject: 'Nuova Prenotazione',
+        subject: 'Nuova Prenotazione lezione Pilates',
         text: emailBody,
     };
 
