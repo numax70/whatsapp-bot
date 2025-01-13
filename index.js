@@ -255,4 +255,5 @@ client.on('message', async (message) => {
 });
 
 // Avvio del bot
-client
+client.initialize();
+client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
