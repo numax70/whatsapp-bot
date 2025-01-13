@@ -24,4 +24,8 @@ Thumbs.db
 .cache/
 
 firebase-adminsdk.json
+*.json
+
+.env
+
 

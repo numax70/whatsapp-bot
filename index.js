@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 const fs = require('fs');
@@ -17,9 +18,14 @@ const EMAIL_PASS = process.env.EMAIL_PASS;
 // Firebase Admin SDK
 const serviceAccount = require('./firebase-adminsdk.json'); // File di configurazione Firebase
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app/', // URL del database
+    credential: admin.credential.cert({
+        project_id: process.env.FIREBASE_PROJECT_ID,
+        private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        client_email: process.env.FIREBASE_CLIENT_EMAIL
+    }),
+    databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app/' // Sostituisci con il tuo URL
 });
+
 const db = admin.database();
 
 // Stato utenti
