@@ -16,7 +16,6 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 
 // Firebase Admin SDK
-const serviceAccount = require('./firebase-adminsdk.json'); // File di configurazione Firebase
 admin.initializeApp({
     credential: admin.credential.cert({
         project_id: process.env.FIREBASE_PROJECT_ID,
