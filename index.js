@@ -11,7 +11,7 @@ app.listen(PORT, () => {
 });
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale'); // Locale italiano
@@ -156,9 +156,16 @@ const client = new Client({
 
 // Mostra il QR code per connettere il bot
 client.on('qr', (qr) => {
-    console.log('Scansiona il QR Code con WhatsApp:');
-    qrcode.generate(qr, { small: true });
+    console.log('QR Code generato. Salvataggio in corso...');
+    qrcode.toFile('qr-code.png', qr, (err) => {
+        if (err) {
+            console.error('Errore nel salvataggio del QR Code:', err.message);
+        } else {
+            console.log('QR Code salvato come "qr-code.png". Scaricalo da Render.');
+        }
+    });
 });
+
 
 // Conferma che il bot è pronto
 client.on('ready', async () => {
