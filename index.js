@@ -1,23 +1,23 @@
 const express = require('express');
 const app = express();
-const fs = require('fs'); // Modulo per lavorare con il file system
-const path = require('path'); // Modulo per gestire i percorsi
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
-const { it } = require('date-fns/locale'); // Locale italiano
+const { it } = require('date-fns/locale');
 
-// Legge le variabili d'ambiente
+// Variabili d'ambiente
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
-const EMAIL_USER = process.env.EMAIL_USER; // Email per l'invio
-const EMAIL_PASS = process.env.EMAIL_PASS; // Password per l'app Gmail
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 
-// Stato per gli utenti
+// Stato utenti
 const userStates = {};
-const disengagedUsers = new Set(); // Per gestire utenti che hanno detto "no"
+const disengagedUsers = new Set(); // Per gli utenti che hanno detto "no"
 
-// Configura Nodemailer per l'invio email
+// Configurazione email
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Funzione per inviare email di notifica
+// Funzione per inviare email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -53,7 +53,7 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-// Funzione per inviare la notifica finale al proprietario
+// Funzione per inviare notifica al proprietario
 async function sendFinalNotification(client, bookingData) {
     const summary = `
         Prenotazione completata:
@@ -65,7 +65,7 @@ async function sendFinalNotification(client, bookingData) {
     `;
 
     try {
-        console.log(`Invio notifica finale a ${OWNER_PHONE} con il seguente messaggio:\n${summary}`);
+        console.log(`Invio notifica finale a ${OWNER_PHONE} con il messaggio:\n${summary}`);
         await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:\n${summary}`);
         console.log('Notifica finale inviata con successo.');
     } catch (error) {
@@ -73,7 +73,7 @@ async function sendFinalNotification(client, bookingData) {
     }
 }
 
-// Funzione per inviare il promemoria all'utente
+// Funzione per inviare promemoria all'utente
 async function sendUserReminder(client, chatId, bookingData) {
     const summary = `
 📋 *Promemoria della tua Prenotazione*
@@ -84,114 +84,88 @@ async function sendUserReminder(client, chatId, bookingData) {
 📅 Data richiesta: ${bookingData.date}
 ⏰ Orario richiesto: ${bookingData.time}
 ──────────────────────
-Grazie per aver prenotato con noi la tua lezione gratuita! Per modifiche o cancellazioni, rispondi a questo messaggio.
+Grazie per aver prenotato con noi la tua lezione gratuita!
     `;
 
     try {
-        console.log(`Invio promemoria all'utente ${chatId} con il seguente messaggio:\n${summary}`);
+        console.log(`Invio promemoria all'utente ${chatId}:\n${summary}`);
         await client.sendMessage(chatId, summary);
-        console.log('Promemoria inviato con successo all\'utente.');
+        console.log('Promemoria inviato con successo.');
     } catch (error) {
         console.error(`Errore nell'invio del promemoria all'utente ${chatId}:`, error.message);
     }
 }
 
-// Funzione per validare e formattare la data
+// Funzioni di validazione
 function validateAndFormatDate(input) {
     const today = new Date();
     const yearEnd = endOfYear(today);
     let parsedDate;
 
     const formats = ['dd MMMM yyyy', 'dd/MM/yyyy'];
-
     for (const fmt of formats) {
         parsedDate = parse(input, fmt, today, { locale: it });
-
-        if (isValid(parsedDate)) {
-            if (isFuture(parsedDate) && isWithinInterval(parsedDate, { start: today, end: yearEnd })) {
-                return format(parsedDate, 'dd/MM/yyyy');
-            }
+        if (isValid(parsedDate) && isFuture(parsedDate) && isWithinInterval(parsedDate, { start: today, end: yearEnd })) {
+            return format(parsedDate, 'dd/MM/yyyy');
         }
     }
-
     return null;
 }
 
-// Funzione per validare l'orario
 function validateAndFormatTime(input) {
     const timeRegex = /^(\d{1,2}):(\d{2})$/;
     const match = timeRegex.exec(input);
-
     if (match) {
         const hours = parseInt(match[1], 10);
         const minutes = parseInt(match[2], 10);
-
         if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         }
     }
-
     return null;
 }
 
-// Configurazione del client WhatsApp
-const client = new Client({
-    authStrategy: new LocalAuth(),
-});
+// Configurazione WhatsApp client
+const client = new Client({ authStrategy: new LocalAuth() });
 
 // Gestione QR Code
 client.on('qr', (qr) => {
-    console.log('QR Code generato. Salvataggio in corso...');
+    console.log('QR Code generato.');
     const qrPath = path.join(__dirname, 'qr.png');
     qrcode.toFile(qrPath, qr, (err) => {
         if (err) {
             console.error('Errore durante il salvataggio del QR Code:', err.message);
         } else {
-            console.log(`QR Code salvato come ${qrPath}`);
+            console.log(`QR Code salvato in: ${qrPath}`);
         }
     });
 });
 
-// Server Express per visualizzare il QR Code
+// Server Express
 app.get('/qr', (req, res) => {
     const qrPath = path.join(__dirname, 'qr.png');
     if (fs.existsSync(qrPath)) {
         res.sendFile(qrPath);
     } else {
-        res.status(404).send('QR Code non trovato. Attendi qualche istante.');
+        res.status(404).send('QR Code non trovato.');
     }
 });
 
-// Altre rotte
 app.get('/', (req, res) => res.send('Il bot è attivo!'));
 
-// Porta di ascolto
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
 
-// Avvio del bot
-client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
-
-// Aggiunta di log per i messaggi ricevuti
-/* client.on('message', async (message) => {
-    console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
-    if (message.body.toLowerCase() === 'ciao') {
-        await message.reply('Ciao! Il bot è operativo.');
-    }
-}); */
-// Gestione dei messaggi ricevuti
+// Gestione messaggi
 client.on('message', async (message) => {
+    console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
     const userResponse = message.body.trim().toLowerCase();
 
-    console.log(`Messaggio ricevuto da ${chatId}: ${message.body}`);
-
-    // Ignora i messaggi del proprietario
     if (chatId === OWNER_PHONE) return;
 
-    // Se l'utente ha detto "no", riattivarlo solo se dice "prenotazione"
     if (disengagedUsers.has(chatId)) {
         if (userResponse === 'prenotazione') {
             disengagedUsers.delete(chatId);
@@ -200,7 +174,7 @@ client.on('message', async (message) => {
         }
         return;
     }
-    // Inizializza lo stato dell'utente se non esiste
+
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'initial', data: {} };
         await message.reply('Vuoi prenotare una lezione di Pilates? Digita "Sì" o "No".');
@@ -209,7 +183,6 @@ client.on('message', async (message) => {
 
     const userState = userStates[chatId];
 
-    // Gestione del flusso di prenotazione
     switch (userState.step) {
         case 'initial':
             if (userResponse === 'sì' || userResponse === 'si') {
@@ -218,9 +191,9 @@ client.on('message', async (message) => {
             } else if (userResponse === 'no') {
                 disengagedUsers.add(chatId);
                 delete userStates[chatId];
-                await message.reply('Va bene! Se desideri prenotare in futuro, scrivi "prenotazione".');
+                await message.reply('Va bene! Se vuoi prenotare, digita "prenotazione".');
             } else {
-                await message.reply('Non ho capito. Vuoi prenotare una lezione di Pilates? Digita "Sì" o "No".');
+                await message.reply('Non ho capito. Vuoi prenotare una lezione? Digita "Sì" o "No".');
             }
             break;
 
@@ -241,9 +214,9 @@ client.on('message', async (message) => {
             if (phone.length >= 8 && phone.length <= 15) {
                 userState.data.phone = phone;
                 userState.step = 'ask_date';
-                await message.reply('Quale data preferisci per la lezione? (Esempio: "12 Febbraio 2025").');
+                await message.reply('Quale data preferisci? (Formato: "12 Febbraio 2025").');
             } else {
-                await message.reply('Il numero di telefono non è valido. Riprova.');
+                await message.reply('Numero di telefono non valido.');
             }
             break;
 
@@ -254,7 +227,7 @@ client.on('message', async (message) => {
                 userState.step = 'ask_time';
                 await message.reply('A che ora vuoi prenotare? (Formato: "14:30").');
             } else {
-                await message.reply('La data non è valida. Inserisci una data futura valida.');
+                await message.reply('Data non valida.');
             }
             break;
 
@@ -262,23 +235,24 @@ client.on('message', async (message) => {
             const time = validateAndFormatTime(message.body.trim());
             if (time) {
                 userState.data.time = time;
-                await message.reply('La tua prenotazione è stata completata! Grazie.');
-                console.log(`Prenotazione completata:`, userState.data);
+                console.log(`Prenotazione completata: ${JSON.stringify(userState.data)}`);
+                await sendFinalNotification(client, userState.data);
+                await sendEmailNotification(userState.data);
+                await sendUserReminder(client, chatId, userState.data);
                 delete userStates[chatId];
+                await message.reply('Prenotazione completata. Grazie!');
             } else {
-                await message.reply('L\'orario non è valido. Inserisci un orario valido (Formato: "14:30").');
+                await message.reply('Orario non valido.');
             }
             break;
 
         default:
             console.error(`Stato sconosciuto: ${userState.step}`);
             delete userStates[chatId];
-            await message.reply('Si è verificato un errore. Riprova.');
+            await message.reply('Si è verificato un errore.');
             break;
     }
 });
 
-
-
-// Inizializza il client WhatsApp
-client.initialize();
+// Avvio del bot
+client
