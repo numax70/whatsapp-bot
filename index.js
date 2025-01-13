@@ -17,7 +17,7 @@ const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = requir
 const { it } = require('date-fns/locale'); // Locale italiano
 
 // Legge le variabili d'ambiente
-const OWNER_PHONE = process.env.OWNER_PHONE; // Numero del proprietario
+const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us'; // Numero del proprietario
 const EMAIL_USER = process.env.EMAIL_USER;   // Email per l'invio
 const EMAIL_PASS = process.env.EMAIL_PASS;   // Password per l'app Gmail
 
