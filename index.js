@@ -6,7 +6,7 @@ const fs = require('fs'); // Aggiungi questo in alto
 app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
 
 // Apertura della porta
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server in ascolto sulla porta ${PORT}`);
 });
@@ -284,7 +284,6 @@ client.on('message', async (message) => {
 client.initialize();
 
 // **Aggiungi qui il server Express per visualizzare il QR Code**
-
 app.get('/qr', (req, res) => {
     try {
         const qrCode = fs.readFileSync('qr-code.txt', 'utf8');
