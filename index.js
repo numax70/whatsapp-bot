@@ -282,7 +282,4 @@ client.on('message', async (message) => {
 // Avvia il bot
 client.initialize();
 
-// Rotta fittizia per il Web Service
-app.get('/', (req, res) => res.send('Il bot è in esecuzione!'));
-
 
