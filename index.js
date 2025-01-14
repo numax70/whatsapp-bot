@@ -9,6 +9,8 @@ const nodemailer = require('nodemailer');
 const admin = require('firebase-admin'); // Firebase Admin SDK
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale');
+
+// Definizione di OWNER_PHONE
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us'; // Definisci il numero di telefono del proprietario
 
 // Verifica variabili d'ambiente
@@ -105,6 +107,25 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
+// Funzione per inviare notifiche e promemoria
+async function sendFinalNotification(client, bookingData) {
+    const summary = `
+        Prenotazione completata:
+        - Nome: ${bookingData.name}
+        - Cognome: ${bookingData.surname}
+        - Telefono: ${bookingData.phone}
+        - Data: ${bookingData.date}
+        - Ora: ${bookingData.time}
+    `;
+    try {
+        console.log(`Invio notifica finale a ${OWNER_PHONE}:\n${summary}`);
+        await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:\n${summary}`);
+        console.log('Notifica finale inviata con successo.');
+    } catch (error) {
+        console.error(`Errore nell'invio della notifica finale a ${OWNER_PHONE}:`, error.message);
+    }
+}
+
 // Funzioni di validazione
 function validateAndFormatDate(input) {
     const today = new Date();
@@ -131,33 +152,7 @@ client.on('qr', (qr) => {
     });
 });
 
-// Rotta per ottenere il QR Code
-app.get('/qr', (req, res) => {
-    const qrPath = path.join(__dirname, 'qr.png');
-    fs.access(qrPath, fs.constants.R_OK, (err) => {
-        if (err) {
-            console.error('Il QR Code non è disponibile:', err.message);
-            res.status(404).send('QR Code non trovato.');
-        } else {
-            res.sendFile(qrPath);
-            console.log('QR Code inviato con successo.');
-        }
-    });
-});
-
-// Rotta ping per uptime
-app.get('/ping', (req, res) => {
-    console.log('Ping ricevuto da UptimeRobot.');
-    res.status(200).send('OK');
-});
-
-app.get('/', (req, res) => res.send('Il bot è attivo!'));
-
-// Avvio del server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server in ascolto sulla porta ${PORT}`));
-
-// Gestione dei messaggi WhatsApp
+// Gestione dei messaggi
 client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
@@ -185,11 +180,9 @@ client.on('message', async (message) => {
     }
 });
 
-// Riconnessione automatica
-client.on('disconnected', (reason) => {
-    console.log(`Bot disconnesso: ${reason}`);
-    client.initialize();
-});
+// Avvio del server
+app.listen(process.env.PORT || 10000, () => console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`));
 
-client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
+// Riconnessione automatica
+client.on('disconnected', () => client.initialize());
 client.initialize();
