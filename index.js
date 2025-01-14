@@ -108,7 +108,22 @@ async function populateCalendarWithValidation() {
             { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
             { "time": "18:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
         ],
-        // Aggiungi i dati per gli altri giorni
+        "mercoledì": [
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "10:30", "lessonType": "POSTURALE", "remainingSeats": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+        ],
+        "giovedì": [
+            { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "18:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "19:00", "lessonType": "YOGA", "remainingSeats": 10 },
+        ],
+        "venerdì": [
+            { "time": "14:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "15:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 },
+        ],
     };
 
     let currentDate = startDate;
@@ -122,24 +137,65 @@ async function populateCalendarWithValidation() {
                 try {
                     const ref = db.ref(`calendario/${formattedDate}`);
                     const snapshot = await ref.once('value');
-                    const existingData = snapshot.val();
+                    let existingData = snapshot.val();
 
                     if (!existingData) {
+                        // Se non esistono dati, inizializza con la struttura dello schedule
                         await ref.set(schedule[day]);
                         console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
                     } else {
-                        console.log(`ℹ️ Dati già esistenti per ${formattedDate}`);
+                        // Aggiorna eventuali slot mancanti o campi non inizializzati
+                        existingData = existingData.map((slot) => ({
+                            ...slot,
+                            remainingSeats: slot.remainingSeats || 10, // Aggiunge il campo se mancante
+                        }));
+                        await ref.set(existingData);
+                        console.log(`🔄 Dati aggiornati per ${formattedDate}:`, existingData);
                     }
                 } catch (error) {
                     console.error(`❌ Errore durante il popolamento per ${formattedDate}:`, error.message);
                 }
             }
+        } else {
+            console.log(`⏭ Giorno saltato (weekend): ${format(currentDate, 'yyyy-MM-dd')}`);
         }
         currentDate = addDays(currentDate, 1);
     }
     console.log('🎉 Calendario popolato con successo.');
 }
 
+async function migrateRemainingSeats() {
+    const migrationFlagRef = db.ref('migrationFlags/remainingSeats');
+    const migrationFlagSnapshot = await migrationFlagRef.once('value');
+    const isMigrationDone = migrationFlagSnapshot.val();
+
+    if (isMigrationDone) {
+        console.log('ℹ️ Migrazione "remainingSeats" già completata.');
+        return;
+    }
+
+    const ref = db.ref('calendario');
+    const snapshot = await ref.once('value');
+    const data = snapshot.val();
+
+    if (data) {
+        for (const date in data) {
+            const slots = data[date];
+            const updatedSlots = slots.map((slot) => ({
+                ...slot,
+                remainingSeats: slot.remainingSeats || 10,
+            }));
+            await db.ref(`calendario/${date}`).set(updatedSlots);
+            console.log(`🔄 Migrazione completata per la data: ${date}`);
+        }
+
+        // Imposta il flag per indicare che la migrazione è completata
+        await migrationFlagRef.set(true);
+        console.log('✅ Migrazione completata e flag aggiornato.');
+    } else {
+        console.log('❌ Nessun dato trovato per migrazione.');
+    }
+}
 
 
 
@@ -210,7 +266,7 @@ app.get('/qr', (req, res) => {
 function displaySchedule() {
     return `
 📅 *Prospetto Settimanale delle Lezioni*
-- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE
+- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE, 12:00 PILATES EXO CHAIR, 13:30 PILATES DANCE BARRE, 14:30, PILATES MATWORK
 - *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
 - *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
 - *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
@@ -434,5 +490,6 @@ client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
     await populateCalendarWithValidation();
+    await migrateRemainingSeats();
 });
 client.initialize();
