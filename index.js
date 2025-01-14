@@ -68,7 +68,7 @@ function validateAndFormatDate(input) {
 }
 
 // Funzione per popolare il calendario su Firebase
-async function populateCalendar() {
+async function populateCalendarWithValidation() {
     const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
     const endDate = new Date(2025, 6, 31); // 31 luglio 2025
 
@@ -96,18 +96,37 @@ async function populateCalendar() {
     };
 
     let currentDate = startDate;
+    console.log('Inizio popolamento del calendario...');
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
             const day = format(currentDate, 'EEEE', { locale: it });
             if (schedule[day]) {
                 const formattedDate = format(currentDate, 'yyyy-MM-dd');
-                await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
+                try {
+                    const ref = db.ref(`calendario/${formattedDate}`);
+                    const snapshot = await ref.once('value');
+                    const existingData = snapshot.val();
+
+                    if (!existingData) {
+                        await ref.set(schedule[day]);
+                        console.log(`Dati aggiunti per ${formattedDate}:`, schedule[day]);
+                    } else {
+                        console.log(`Dati già esistenti per ${formattedDate}:`, existingData);
+                    }
+                } catch (error) {
+                    console.error(`Errore durante il popolamento per ${formattedDate}:`, error.message);
+                }
+            } else {
+                console.warn(`Nessun orario programmato per il giorno ${day}`);
             }
+        } else {
+            console.log(`Giorno saltato (weekend):`, format(currentDate, 'yyyy-MM-dd'));
         }
         currentDate = addDays(currentDate, 1);
     }
-    console.log('Calendario popolato correttamente.');
+    console.log('Calendario popolato con successo.');
 }
+
 
 // Funzione per mostrare il prospetto delle lezioni
 async function getSchedule(date) {
@@ -165,6 +184,16 @@ app.get('/qr', (req, res) => {
         res.sendFile(qrPath);
     } else {
         res.status(404).send('QR Code non trovato.');
+    }
+});
+app.get('/test-db', async (req, res) => {
+    try {
+        await db.ref('test').set({ message: 'Test di scrittura riuscito' });
+        console.log('Scrittura di test nel database riuscita.');
+        res.send('Scrittura riuscita nel database Firebase.');
+    } catch (error) {
+        console.error('Errore durante la scrittura nel database:', error.message);
+        res.status(500).send('Scrittura nel database fallita.');
     }
 });
 
@@ -253,7 +282,7 @@ client.on('message', async (message) => {
 // Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-    await populateCalendar();
+    await populateCalendarWithValidation();
 });
 
 // Ping per evitare sospensione
