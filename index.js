@@ -36,12 +36,13 @@ try {
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
-    console.error("Errore durante l'inizializzazione di Firebase:", error.message);
+    console.error('Errore durante l\'inizializzazione di Firebase:', error.message);
     process.exit(1);
 }
 
 const db = admin.database();
 const userStates = {};
+const disengagedUsers = new Set(); // Utenti disimpegnati
 
 // Configurazione email
 const transporter = nodemailer.createTransport({
@@ -68,8 +69,8 @@ function validateAndFormatDate(input) {
 
 // Funzione per popolare il calendario su Firebase
 async function populateCalendarWithValidation() {
-    const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
-    const endDate = new Date(2025, 6, 31); // 31 luglio 2025
+    const startDate = new Date(2025, 0, 1);
+    const endDate = new Date(2025, 6, 31);
 
     const schedule = {
         "Lunedì": [
@@ -98,9 +99,9 @@ async function populateCalendarWithValidation() {
 
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
-            const day = format(currentDate, 'EEEE', { locale: it }); // Giorno della settimana in italiano
+            const day = format(currentDate, 'EEEE', { locale: it });
             if (schedule[day]) {
-                const formattedDate = format(currentDate, 'yyyy-MM-dd'); // Data in formato ISO
+                const formattedDate = format(currentDate, 'yyyy-MM-dd');
                 try {
                     const ref = db.ref(`calendario/${formattedDate}`);
                     const snapshot = await ref.once('value');
@@ -120,28 +121,16 @@ async function populateCalendarWithValidation() {
     console.log('Calendario popolato con successo.');
 }
 
-// Funzione per mostrare il prospetto delle lezioni
-function displaySchedule() {
-    return `
-📅 *Prospetto Settimanale delle Lezioni*
-- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE
-- *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
-- *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
-- *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
-- *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
-`;
-}
-
-// Funzione per notifiche ed email
-async function sendEmailNotification(bookingData) {
+// Funzione per notifiche email
+async function sendEmailNotification(data) {
     const emailBody = `
         Nuova prenotazione ricevuta:
-        - Nome: ${bookingData.name}
-        - Cognome: ${bookingData.surname}
-        - Telefono: ${bookingData.phone}
-        - Data: ${bookingData.date}
-        - Ora: ${bookingData.time}
-        - Tipo di lezione: ${bookingData.lessonType}
+        - Nome: ${data.name}
+        - Cognome: ${data.surname}
+        - Telefono: ${data.phone}
+        - Data: ${data.date}
+        - Ora: ${data.time}
+        - Tipo di lezione: ${data.lessonType}
     `;
 
     const mailOptions = {
@@ -153,7 +142,7 @@ async function sendEmailNotification(bookingData) {
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log('Email inviata con successo all\'owner.');
+        console.log('Email inviata all\'owner.');
     } catch (error) {
         console.error('Errore nell\'invio dell\'email:', error.message);
     }
@@ -184,11 +173,20 @@ client.on('message', async (message) => {
     const chatId = message.from;
     const userResponse = message.body.trim();
 
+    if (disengagedUsers.has(chatId)) {
+        if (userResponse.toLowerCase() === 'prenotazione') {
+            disengagedUsers.delete(chatId);
+            userStates[chatId] = { step: 'ask_booking' };
+            await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".`);
+        } else {
+            await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
+        }
+        return;
+    }
+
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_booking' };
-        await message.reply(
-            `Vuoi prenotare una lezione? Digita "Sì" o "No".\n${displaySchedule()}`
-        );
+        await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".`);
         return;
     }
 
@@ -200,8 +198,9 @@ client.on('message', async (message) => {
                 userState.step = 'ask_date';
                 await message.reply('Inserisci la data della lezione (formato: GG/MM/YYYY):');
             } else if (userResponse.toLowerCase() === 'no') {
+                disengagedUsers.add(chatId);
                 delete userStates[chatId];
-                await message.reply('Ok, puoi scrivere "prenotazione" se vuoi prenotare in futuro.');
+                await message.reply('Ok, puoi scrivere "prenotazione" in qualsiasi momento.');
             } else {
                 await message.reply('Per favore, rispondi con "Sì" o "No".');
             }
@@ -210,38 +209,16 @@ client.on('message', async (message) => {
         case 'ask_date':
             const date = validateAndFormatDate(userResponse);
             if (date) {
-                const slots = await getAvailableSlots(date);
-                if (slots.length > 0) {
-                    userState.data = { date };
-                    userState.step = 'ask_time';
-                    const slotOptions = slots.map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`).join('\n');
-                    await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
-                } else {
-                    await message.reply('Nessun orario disponibile per questa data.');
-                }
+                userState.date = date;
+                userState.step = 'ask_time';
+                await message.reply(`Orari disponibili per ${date}: ...`); // Aggiungi logica per orari
             } else {
                 await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
             }
             break;
 
-        case 'ask_time':
-            const timeIndex = parseInt(userResponse, 10) - 1;
-            const slots = await getAvailableSlots(userState.data.date);
-            if (slots[timeIndex]) {
-                const selectedSlot = slots[timeIndex];
-                userState.data = { ...userState.data, ...selectedSlot };
-                await sendEmailNotification(userState.data);
-                await message.reply('Prenotazione completata con successo!');
-                delete userStates[chatId];
-            } else {
-                await message.reply('Orario non valido. Riprova.');
-            }
-            break;
-
         default:
-            delete userStates[chatId];
             await message.reply('Errore sconosciuto. Riprova.');
-            break;
     }
 });
 
@@ -251,17 +228,16 @@ app.listen(process.env.PORT || 10000, async () => {
     await populateCalendarWithValidation();
 });
 
-// Monitoraggio risorse
-setInterval(() => {
-    const memoryUsage = process.memoryUsage();
-    const cpuLoad = os.loadavg();
-    console.log(`RAM Utilizzata: ${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`CPU Load (1 minuto): ${cpuLoad[0].toFixed(2)}`);
-}, 60000);
-
+// Ping per evitare sospensione
 app.get('/ping', (req, res) => {
     res.status(200).send('OK');
 });
+
+// Monitoraggio risorse
+setInterval(() => {
+    console.log(`RAM Utilizzata: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
+}, 60000);
 
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 client.initialize();
