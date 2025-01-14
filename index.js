@@ -93,46 +93,37 @@ async function populateCalendarWithValidation() {
     const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
     const endDate = new Date(2025, 6, 31); // 31 luglio 2025
 
+    // Tabella con orari e lezioni aggiornati
     const schedule = {
         "lunedì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "11:30", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
-            { "time": "17:00", "lessonType": "PILATES MATWORK" },
-            { "time": "18:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "10:30", "lessonType": "POSTURALE", "availableSpots": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "availableSpots": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "availableSpots": 10 },
         ],
         "martedì": [
-            { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "14:30", "lessonType": "PILATES MATWORK" },
-            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "17:00", "lessonType": "PILATES DANCE BARRE" },
-            { "time": "18:15", "lessonType": "PILATES MATWORK" },
-            { "time": "19:00", "lessonType": "YOGA" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "13:30", "lessonType": "GIROKYNESIS", "availableSpots": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "availableSpots": 10 },
         ],
         "mercoledì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "11:30", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
-            { "time": "14:30", "lessonType": "PILATES MATWORK" },
-            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "18:15", "lessonType": "PILATES MATWORK" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "10:30", "lessonType": "POSTURALE", "availableSpots": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "availableSpots": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "availableSpots": 10 },
         ],
         "giovedì": [
-            { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "14:30", "lessonType": "PILATES MATWORK" },
-            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "18:00", "lessonType": "PILATES MATWORK" },
-            { "time": "19:00", "lessonType": "YOGA" },
+            { "time": "09:30", "lessonType": "GIROKYNESIS", "availableSpots": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "availableSpots": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "18:30", "lessonType": "YOGA", "availableSpots": 10 },
         ],
         "venerdì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
-            { "time": "14:30", "lessonType": "PILATES MATWORK" },
-            { "time": "17:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "availableSpots": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "availableSpots": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "availableSpots": 10 },
+            { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "availableSpots": 10 },
         ],
     };
 
@@ -150,9 +141,8 @@ async function populateCalendarWithValidation() {
                     const existingData = snapshot.val();
 
                     if (!existingData) {
-                        const slots = schedule[day].map(slot => ({ ...slot, availableSpots: 10 }));
-                        await ref.set(slots);
-                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, slots);
+                        await ref.set(schedule[day]);
+                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
                     } else {
                         console.log(`ℹ️ Dati già esistenti per ${formattedDate}`);
                     }
@@ -169,6 +159,7 @@ async function populateCalendarWithValidation() {
     }
     console.log('🎉 Calendario popolato con successo.');
 }
+
 
 
 
@@ -265,22 +256,29 @@ async function updateAvailableSlots(date, time) {
         const snapshot = await ref.once('value');
         const slots = snapshot.val() || [];
 
-        const updatedSlots = slots.map((slot) => {
-            if (slot.time === time) {
-                // Riduci il numero di posti disponibili
-                if (slot.availableSpots > 0) {
-                    return { ...slot, availableSpots: slot.availableSpots - 1 };
-                } else {
-                    console.warn(`⚠️ Nessun posto disponibile per l'orario ${time} del ${date}`);
-                }
-            }
-            return slot;
-        });
+        // Trova lo slot corrispondente all'orario
+        const slotIndex = slots.findIndex(slot => slot.time === time);
 
-        await ref.set(updatedSlots);
-        console.log(`✅ Slot aggiornati per ${date} - Orario: ${time}`);
+        if (slotIndex === -1) {
+            console.error(`❌ Slot non trovato per la data ${date} e l'orario ${time}`);
+            return { success: false, message: 'Orario non disponibile.' };
+        }
+
+        // Aggiorna il campo availableSpots
+        if (slots[slotIndex].availableSpots > 0) {
+            slots[slotIndex].availableSpots -= 1;
+
+            // Se disponibileSpots raggiunge 0, lo slot rimane ma non può essere prenotato
+            await ref.set(slots); // Aggiorna il database
+            console.log(`✅ Slot aggiornato per ${date} alle ${time}. Posti rimanenti: ${slots[slotIndex].availableSpots}`);
+            return { success: true, message: 'Prenotazione effettuata con successo.' };
+        } else {
+            console.error(`❌ Nessun posto disponibile per ${date} alle ${time}`);
+            return { success: false, message: 'Orario al completo. Scegli un altro orario.' };
+        }
     } catch (error) {
-        console.error(`❌ Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
+        console.error(`❌ Errore durante l'aggiornamento degli slot per ${date} alle ${time}:`, error.message);
+        return { success: false, message: 'Errore durante l\'aggiornamento degli slot.' };
     }
 }
 
@@ -348,22 +346,29 @@ client.on('message', async (message) => {
             }
             break;
 
-        case 'ask_time':
-            const timeIndex = parseInt(userResponse, 10) - 1; // Converti la risposta in indice
-            const slots = await getAvailableSlots(userState.data.date);
-            if (slots[timeIndex]) {
-                const selectedSlot = slots[timeIndex];
-                userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
-                await updateAvailableSlots(userState.data.date, selectedSlot.time); // Aggiorna il database
-                await sendWhatsAppNotification(client, chatId, userState.data); // Messaggio al cliente
-                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data); // Messaggio all'owner
-                await sendEmailNotification(userState.data); // Invia email all'owner
-                await message.reply('Prenotazione completata con successo! ✅');
-                delete userStates[chatId]; // Reset dello stato dell'utente
-            } else {
-                await message.reply('Orario non valido. Prova con un altro numero.');
-            }
-            break;
+            case 'ask_time':
+                const timeIndex = parseInt(userResponse, 10) - 1;
+                const slots = await getAvailableSlots(userState.data.date);
+            
+                if (slots[timeIndex]) {
+                    const selectedSlot = slots[timeIndex];
+                    const result = await updateAvailableSlots(userState.data.date, selectedSlot.time);
+            
+                    if (result.success) {
+                        userState.data = { ...userState.data, ...selectedSlot };
+                        await sendWhatsAppNotification(client, chatId, userState.data);
+                        await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                        await sendEmailNotification(userState.data);
+                        await message.reply('Prenotazione completata con successo! ✅');
+                        delete userStates[chatId]; // Reset dello stato dell'utente
+                    } else {
+                        await message.reply(result.message);
+                    }
+                } else {
+                    await message.reply('Orario non valido. Prova con un altro numero.');
+                }
+                break;
+            
 
         default:
             await message.reply('Errore sconosciuto. Riprova.');
