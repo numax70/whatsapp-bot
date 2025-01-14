@@ -67,6 +67,26 @@ function validateAndFormatDate(input) {
     return null;
 }
 
+// Funzione per inviare il riepilogo al cliente
+async function sendWhatsAppNotification(client, phone, bookingData) {
+    const message = `
+📋 *Riepilogo Prenotazione*
+👤 Nome: ${bookingData.name || 'N/A'}
+👥 Cognome: ${bookingData.surname || 'N/A'}
+📞 Telefono: ${bookingData.phone || 'N/A'}
+📅 Data: ${bookingData.date}
+⏰ Ora: ${bookingData.time}
+📘 Lezione: ${bookingData.lessonType}
+    `;
+
+    try {
+        await client.sendMessage(phone, message);
+        console.log(`Riepilogo prenotazione inviato a ${phone}.`);
+    } catch (error) {
+        console.error(`Errore nell'invio del riepilogo a ${phone}:`, error.message);
+    }
+}
+
 // Funzione per popolare il calendario su Firebase
 async function populateCalendarWithValidation() {
     const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
@@ -190,37 +210,53 @@ app.get('/qr', (req, res) => {
     }
 });
 
+// Funzione per prospetto settimanale
+function displaySchedule() {
+    return `
+📅 *Prospetto Settimanale delle Lezioni*
+- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE
+- *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
+- *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
+- *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
+- *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
+`;
+}
 
 // Gestione messaggi WhatsApp
 client.on('message', async (message) => {
     const chatId = message.from;
-    const userResponse = message.body.trim();
+    const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
 
+    // Se l'utente è disimpegnato
     if (disengagedUsers.has(chatId)) {
-        if (userResponse.toLowerCase() === 'prenotazione') {
+        if (userResponse === 'prenotazione') {
             disengagedUsers.delete(chatId);
             userStates[chatId] = { step: 'ask_booking' };
-            await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".`);
+            await message.reply(
+                `Vuoi prenotare una lezione? Digita "Sì" o "No".`
+            );
         } else {
             await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
         }
         return;
     }
 
+    // Se l'utente non ha uno stato attivo, inizializza
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_booking' };
-        await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".`);
+        await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".\n${displaySchedule()}`);
         return;
     }
 
     const userState = userStates[chatId];
 
+    // Gestione del flusso
     switch (userState.step) {
         case 'ask_booking':
-            if (userResponse.toLowerCase() === 'sì') {
+            if (userResponse === 'sì' || userResponse === 'si') {
                 userState.step = 'ask_date';
                 await message.reply('Inserisci la data della lezione (formato: GG/MM/YYYY):');
-            } else if (userResponse.toLowerCase() === 'no') {
+            } else if (userResponse === 'no') {
                 disengagedUsers.add(chatId);
                 delete userStates[chatId];
                 await message.reply('Ok, puoi scrivere "prenotazione" in qualsiasi momento.');
@@ -232,14 +268,16 @@ client.on('message', async (message) => {
         case 'ask_date':
             const date = validateAndFormatDate(userResponse);
             if (date) {
-                const schedule = await getSchedule(date);
-                if (schedule.length > 0) {
-                    userState.date = date;
+                const slots = await getAvailableSlots(date);
+                if (slots.length > 0) {
+                    userState.data = { date }; // Salva la data
                     userState.step = 'ask_time';
-                    const slots = schedule.map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`).join('\n');
-                    await message.reply(`Orari disponibili per ${date}:\n${slots}`);
+                    const slotOptions = slots.map(
+                        (slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`
+                    ).join('\n');
+                    await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
                 } else {
-                    await message.reply('Nessun orario disponibile per questa data.');
+                    await message.reply('Nessun orario disponibile per questa data. Prova con un\'altra data.');
                 }
             } else {
                 await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
@@ -247,37 +285,31 @@ client.on('message', async (message) => {
             break;
 
         case 'ask_time':
-            const timeIndex = parseInt(userResponse, 10) - 1;
-            const schedule = await getSchedule(userState.date);
-            if (schedule[timeIndex]) {
-                const selectedSlot = schedule[timeIndex];
-                const bookingData = {
-                    name: 'Utente', // Puoi personalizzarlo
-                    surname: 'Generico',
-                    phone: chatId,
-                    date: userState.date,
-                    time: selectedSlot.time,
-                    lessonType: selectedSlot.lessonType,
-                };
-                await sendEmailNotification(bookingData);
-                await message.reply(`Prenotazione completata! Riepilogo:\nData: ${bookingData.date}\nOra: ${bookingData.time}\nLezione: ${bookingData.lessonType}`);
-                delete userStates[chatId];
+            const timeIndex = parseInt(userResponse, 10) - 1; // Converti la risposta in indice
+            const slots = await getAvailableSlots(userState.data.date);
+            if (slots[timeIndex]) {
+                const selectedSlot = slots[timeIndex];
+                userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
+                await updateAvailableSlots(userState.data.date, selectedSlot.time); // Aggiorna il database
+                await sendWhatsAppNotification(client, chatId, userState.data); // Messaggio al cliente
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data); // Messaggio all'owner
+                await sendEmailNotification(userState.data); // Invia email all'owner
+                await message.reply('Prenotazione completata con successo! ✅');
+                delete userStates[chatId]; // Reset dello stato dell'utente
             } else {
-                await message.reply('Orario non valido. Riprova.');
+                await message.reply('Orario non valido. Prova con un altro numero.');
             }
             break;
 
         default:
-            delete userStates[chatId];
             await message.reply('Errore sconosciuto. Riprova.');
+            delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
+            break;
     }
 });
 
-// Avvio del server
-app.listen(process.env.PORT || 10000, async () => {
-    console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-    await populateCalendarWithValidation();
-});
+
+
 
 // Ping per evitare sospensione
 app.get('/ping', (req, res) => {
@@ -291,4 +323,9 @@ setInterval(() => {
 }, 60000);
 
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
+// Avvio del server
+app.listen(process.env.PORT || 10000, async () => {
+    console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
+    await populateCalendarWithValidation();
+});
 client.initialize();
