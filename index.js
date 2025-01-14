@@ -55,17 +55,18 @@ const transporter = nodemailer.createTransport({
 
 // Funzione per validare e convertire la data
 function validateAndFormatDate(input) {
-    const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
+    const formats = ['dd/MM/yyyy', 'dd MMMM yyyy']; // Aggiunto "dd MMMM yyyy" per gestire mesi scritti in lettere
     const today = new Date();
 
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
         if (isValid(parsedDate) && isFuture(parsedDate)) {
-            return format(parsedDate, 'yyyy-MM-dd');
+            return format(parsedDate, 'yyyy-MM-dd'); // Restituisce la data nel formato richiesto per il database
         }
     }
-    return null;
+    return null; // Ritorna null se la data non è valida
 }
+
 
 // Funzione per inviare il riepilogo al cliente
 async function sendWhatsAppNotification(client, phone, bookingData) {
@@ -190,6 +191,8 @@ async function sendEmailNotification(data) {
     }
 }
 
+
+
 // Configurazione WhatsApp Client
 const client = new Client({ authStrategy: new LocalAuth() });
 
@@ -222,7 +225,20 @@ function displaySchedule() {
 `;
 }
 
-// Gestione messaggi WhatsApp
+// Funzione per recuperare gli slot disponibili dal database per una data specifica
+async function getAvailableSlots(date) {
+    try {
+        const ref = db.ref(`calendario/${date}`);
+        const snapshot = await ref.once('value');
+        const slots = snapshot.val(); // Ottiene i dati dal nodo corrispondente alla data
+        return slots || []; // Ritorna un array vuoto se non ci sono dati
+    } catch (error) {
+        console.error(`Errore nel recupero degli slot disponibili per ${date}:`, error.message);
+        return [];
+    }
+}
+
+
 // Gestione messaggi WhatsApp
 client.on('message', async (message) => {
     const chatId = message.from;
@@ -308,9 +324,6 @@ client.on('message', async (message) => {
             break;
     }
 });
-
-
-
 
 
 // Ping per evitare sospensione
