@@ -344,7 +344,6 @@ async function getAvailableSlots(date) {
 }
 
 
-
 // Gestione messaggi WhatsApp
 client.on('message', async (message) => {
     const chatId = message.from;
@@ -401,24 +400,47 @@ client.on('message', async (message) => {
                 }
                     break;
 
-            case 'ask_date':
-                const date = validateAndFormatDate(userResponse);
-                const inputDate = userResponse === 'oggi' ? format(new Date(), 'yyyy-MM-dd') : validateAndFormatDate(userResponse);
-
-                if (inputDate) {
-                    const nextDate = findNextAvailableDate(schedule, inputDate, userState.data.discipline, userState.data.time);
-                    if (nextDate) {
-                        userState.data.date = nextDate;
-                        userState.step = 'ask_name';
-                        await message.reply(`La prossima data disponibile è ${nextDate}. Inserisci il tuo nome per continuare:`);
-                    } else {
-                        await message.reply('Nessuna data disponibile per questa combinazione. Prova con una nuova data o disciplina.');
-                    }
-                } else {
-                    await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
-                }
-                break;
-            
+                    case 'ask_date':
+                        if (userResponse === 'oggi') {
+                            // L'utente ha chiesto di cercare la prossima data disponibile
+                            const nextAvailableDate = findNextAvailableDate(
+                                schedule,
+                                format(new Date(), 'yyyy-MM-dd'), // Data odierna
+                                userState.data.discipline,
+                                userState.data.time
+                            );
+                    
+                            if (nextAvailableDate) {
+                                userState.data.date = nextAvailableDate; // Salva la data trovata
+                                userState.step = 'ask_name'; // Passa alla fase successiva
+                                await message.reply(`La prossima data disponibile per ${userState.data.discipline} alle ${userState.data.time} è il ${nextAvailableDate}. Procediamo! Inserisci il tuo nome:`);
+                            } else {
+                                await message.reply('Mi dispiace, non ci sono date disponibili per questa disciplina e orario. Prova con un\'altra disciplina o orario.');
+                            }
+                        } else {
+                            // L'utente ha inserito una data specifica
+                            const formattedDate = validateAndFormatDate(userResponse);
+                            if (formattedDate) {
+                                const nextAvailableDate = findNextAvailableDate(
+                                    schedule,
+                                    formattedDate,
+                                    userState.data.discipline,
+                                    userState.data.time
+                                );
+                    
+                                if (nextAvailableDate) {
+                                    userState.data.date = nextAvailableDate; // Salva la data trovata
+                                    userState.step = 'ask_name'; // Passa alla fase successiva
+                                    await message.reply(`La prossima data disponibile per ${userState.data.discipline} alle ${userState.data.time} è il ${nextAvailableDate}. Procediamo! Inserisci il tuo nome:`);
+                                } else {
+                                    await message.reply('Non ci sono date disponibili per la disciplina e l\'orario scelti. Prova con un\'altra data o disciplina.');
+                                }
+                            } else {
+                                await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY) o scrivi "oggi" per cercare la prossima data disponibile.');
+                            }
+                        }
+                        break;
+           
                 
                 
                 case 'ask_name':
