@@ -246,6 +246,21 @@ app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
     await populateCalendar();
 });
+const os = require('os');
+
+// Monitoraggio risorse
+setInterval(() => {
+    const memoryUsage = process.memoryUsage();
+    const cpuLoad = os.loadavg();
+    console.log(`RAM Utilizzata: ${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`CPU Load (1 minuto): ${cpuLoad[0].toFixed(2)}`);
+}, 60000); // Ogni minuto
+
+// Endpoint per UptimeRobot (Ping per evitare sospensione)
+app.get('/ping', (req, res) => {
+    console.log('Ping ricevuto da UptimeRobot.');
+    res.status(200).send('OK');
+});
 
 client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 client.initialize();
