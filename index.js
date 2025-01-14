@@ -7,7 +7,15 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
-const { parse, isValid, isFuture, isWithinInterval, endOfYear, format, addDays, isSaturday, isSunday } = require('date-fns');
+const {
+    parse,
+    isValid,
+    isFuture,
+    format,
+    addDays,
+    isSaturday,
+    isSunday,
+} = require('date-fns');
 const { it } = require('date-fns/locale');
 
 // Variabili d'ambiente
@@ -23,11 +31,15 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
+        databaseURL:
+            'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
-    console.error('Errore durante l\'inizializzazione di Firebase:', error.message);
+    console.error(
+        "Errore durante l'inizializzazione di Firebase:",
+        error.message
+    );
     process.exit(1);
 }
 
@@ -46,27 +58,60 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Popolamento del calendario
+// Funzione per validare e formattare la data
+function validateAndFormatDate(input) {
+    const today = new Date();
+    const formats = ['dd MMMM yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd'];
+
+    for (const fmt of formats) {
+        const parsedDate = parse(input, fmt, today, { locale: it });
+        if (isValid(parsedDate) && isFuture(parsedDate)) {
+            return format(parsedDate, 'yyyy-MM-dd'); // Formatta al formato richiesto
+        }
+    }
+    return null;
+}
+
+// Funzione per popolare il calendario su Firebase
 async function populateCalendar() {
-    const startDate = new Date();
-    const endDate = new Date('2025-07-31');
-    const times = ['09:00', '11:00', '14:00', '16:00'];
-    const lessonTypes = ['Yoga', 'Pilates', 'Fitness'];
+    const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
+    const endDate = new Date(2025, 6, 31); // 31 luglio 2025
+
+    const schedule = {
+        MONDAY: [
+            { time: '09:30', lessonType: 'PILATES MATWORK' },
+            { time: '10:30', lessonType: 'POSTURALE' },
+        ],
+        TUESDAY: [
+            { time: '13:30', lessonType: 'GIROKYNESIS' },
+            { time: '15:00', lessonType: 'PILATES MATWORK' },
+        ],
+        WEDNESDAY: [
+            { time: '09:30', lessonType: 'PILATES MATWORK' },
+            { time: '12:00', lessonType: 'PILATES EXO CHAIR' },
+        ],
+        THURSDAY: [
+            { time: '13:30', lessonType: 'GIROKYNESIS' },
+            { time: '18:00', lessonType: 'YOGA' },
+        ],
+        FRIDAY: [
+            { time: '14:00', lessonType: 'PILATES MATWORK' },
+            { time: '17:00', lessonType: 'FUNCTIONAL TRAINER MOVEMENT' },
+        ],
+    };
 
     let currentDate = startDate;
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
-            const dateStr = format(currentDate, 'yyyy-MM-dd');
-            const slots = times.map((time) => ({
-                time,
-                lessonType: lessonTypes[Math.floor(Math.random() * lessonTypes.length)],
-            }));
-
-            await db.ref(`calendario/${dateStr}`).set(slots);
+            const day = format(currentDate, 'EEEE', { locale: it }).toUpperCase();
+            if (schedule[day]) {
+                const formattedDate = format(currentDate, 'yyyy-MM-dd');
+                await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
+            }
         }
         currentDate = addDays(currentDate, 1);
     }
-    console.log('Calendario popolato.');
+    console.log('Calendario popolato su Firebase.');
 }
 
 // Funzioni Firebase per il calendario
@@ -75,10 +120,12 @@ async function getAvailableSlots(date) {
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val();
-        console.log(`Slot disponibili per ${date}:`, slots);
         return slots || [];
     } catch (error) {
-        console.error(`Errore durante il recupero degli slot disponibili per ${date}:`, error.message);
+        console.error(
+            `Errore durante il recupero degli slot disponibili per ${date}:`,
+            error.message
+        );
         return [];
     }
 }
@@ -90,9 +137,11 @@ async function updateAvailableSlots(date, time) {
         const slots = snapshot.val() || [];
         const updatedSlots = slots.filter((slot) => slot.time !== time);
         await ref.set(updatedSlots);
-        console.log(`Slot aggiornati per ${date}:`, updatedSlots);
     } catch (error) {
-        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
+        console.error(
+            `Errore durante l'aggiornamento degli slot per ${date}:`,
+            error.message
+        );
     }
 }
 
@@ -116,9 +165,7 @@ async function sendEmailNotification(bookingData) {
     };
 
     try {
-        console.log('Invio email...');
         await transporter.sendMail(mailOptions);
-        console.log('Email inviata con successo.');
     } catch (error) {
         console.error('Errore nell\'invio dell\'email:', error.message);
     }
@@ -132,7 +179,6 @@ client.on('qr', (qr) => {
     const qrPath = path.join(__dirname, 'qr.png');
     qrcode.toFile(qrPath, qr, (err) => {
         if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
-        else console.log(`QR Code salvato in ${qrPath}`);
     });
 });
 
@@ -140,7 +186,7 @@ client.on('qr', (qr) => {
 client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
-    const userResponse = message.body.trim().toLowerCase();
+    const userResponse = message.body.trim();
 
     if (chatId === OWNER_PHONE) return;
 
@@ -168,7 +214,7 @@ client.on('message', async (message) => {
                     await message.reply('Nessun orario disponibile per questa data.');
                 }
             } else {
-                await message.reply('Data non valida.');
+                await message.reply('Data non valida. Inserisci una data valida (esempio: 12 Febbraio 2025, 12/02/2025, 2025-02-12).');
             }
             break;
 
