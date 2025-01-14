@@ -234,58 +234,59 @@ async function getAvailableSlots(date) {
     try {
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
-        const slots = snapshot.val(); // Ottiene i dati dal nodo corrispondente alla data
-        return slots || []; // Ritorna un array vuoto se non ci sono dati
+        const slots = snapshot.val();
+
+        if (!slots) {
+            return []; // Nessuno slot disponibile per quella data
+        }
+
+        // Costruisce il prospetto con posti disponibili
+        return slots.map((slot, index) => ({
+            index: index + 1,
+            time: slot.time,
+            lessonType: slot.lessonType,
+            remaining: slot.remaining || 10 // Di default 10 posti se non esiste il campo
+        }));
     } catch (error) {
-        console.error(`Errore nel recupero degli slot disponibili per ${date}:`, error.message);
+        console.error(`Errore durante il recupero degli slot per ${date}:`, error.message);
         return [];
     }
 }
 
+
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
-async function updateAvailableSlots(date, time, userName, userPhone) {
+async function updateAvailableSlots(date, time, name, phone) {
     try {
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val();
 
-        if (!slots || slots.length === 0) {
-            return { success: false, message: 'Nessun slot disponibile per questa data.' };
+        if (!slots) {
+            return { success: false, message: 'Nessuno slot trovato per questa data.' };
         }
 
-        // Trova lo slot corrispondente all'orario richiesto
-        const slotIndex = slots.findIndex((slot) => slot.time === time);
-        if (slotIndex === -1) {
-            return { success: false, message: 'Orario non valido.' };
-        }
+        const updatedSlots = slots.map((slot) => {
+            if (slot.time === time) {
+                if (slot.remaining > 0) {
+                    return {
+                        ...slot,
+                        remaining: slot.remaining - 1,
+                        bookings: [...(slot.bookings || []), { name, phone }]
+                    };
+                } else {
+                    throw new Error('Non ci sono più posti disponibili per questo slot.');
+                }
+            }
+            return slot;
+        });
 
-        const slot = slots[slotIndex];
-
-        // Aggiungi la proprietà `attendees` se non esiste
-        if (!slot.attendees) {
-            slot.attendees = [];
-        }
-
-        // Controlla se il limite massimo di 10 persone è stato raggiunto
-        if (slot.attendees.length >= 10) {
-            return { success: false, message: 'Questo slot ha già raggiunto il limite massimo di 10 persone.' };
-        }
-
-        // Aggiungi il nuovo utente alla lista degli iscritti
-        slot.attendees.push({ name: userName, phone: userPhone });
-
-        // Aggiorna lo slot nel database
-        slots[slotIndex] = slot;
-        await ref.set(slots);
-
-        console.log(`✅ Prenotazione aggiornata per ${date} alle ${time}.`);
-        return { success: true, message: 'Prenotazione completata con successo!' };
+        await ref.set(updatedSlots);
+        return { success: true, message: 'Slot aggiornato con successo.' };
     } catch (error) {
-        console.error(`❌ Errore durante l'aggiornamento degli slot per ${date} alle ${time}:`, error.message);
-        return { success: false, message: 'Errore durante l\'aggiornamento della prenotazione. Riprova più tardi.' };
+        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
+        return { success: false, message: 'Errore durante l\'aggiornamento degli slot.' };
     }
 }
-
 
 
 
@@ -332,24 +333,28 @@ client.on('message', async (message) => {
             }
             break;
 
-        case 'ask_date':
-            const date = validateAndFormatDate(userResponse);
-            if (date) {
-                const slots = await getAvailableSlots(date);
-                if (slots.length > 0) {
-                    userState.data = { date }; // Salva la data
-                    userState.step = 'ask_time'; // Aggiorna lo stato
-                    const slotOptions = slots.map(
-                        (slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`
-                    ).join('\n');
-                    await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
+            case 'ask_date':
+                const date = validateAndFormatDate(userResponse);
+                if (date) {
+                    const slots = await getAvailableSlots(date);
+                    if (slots.length > 0) {
+                        userState.data = { date }; // Salva la data
+                        userState.step = 'ask_time'; // Passa allo stato successivo
+            
+                        // Genera il messaggio con il prospetto
+                        const slotOptions = slots.map(
+                            (slot) => `${slot.index}) ${slot.time} - ${slot.lessonType} (Posti disponibili: ${slot.remaining})`
+                        ).join('\n');
+            
+                        await message.reply(`Ecco le lezioni disponibili per ${date}:\n${slotOptions}\nScegli un numero corrispondente alla lezione.`);
+                    } else {
+                        await message.reply('Nessuna lezione disponibile per questa data. Prova con un\'altra data.');
+                    }
                 } else {
-                    await message.reply('Nessun orario disponibile per questa data. Prova con un\'altra data.');
+                    await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
                 }
-            } else {
-                await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
-            }
-            break;
+                break;
+            
 
         case 'ask_time':
             const timeIndex = parseInt(userResponse, 10) - 1;
