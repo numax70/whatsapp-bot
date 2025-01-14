@@ -67,73 +67,72 @@ function validateAndFormatDate(input) {
 }
 
 // Funzione per popolare il calendario su Firebase
-async function populateCalendar() {
-    const startDate = new Date(2025, 0, 1);
-    const endDate = new Date(2025, 6, 31);
+async function populateCalendarWithValidation() {
+    const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
+    const endDate = new Date(2025, 6, 31); // 31 luglio 2025
 
     const schedule = {
         "Lunedì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" }
+            { "time": "10:30", "lessonType": "POSTURALE" },
         ],
         "Martedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "15:00", "lessonType": "PILATES MATWORK" }
+            { "time": "15:00", "lessonType": "PILATES MATWORK" },
         ],
         "Mercoledì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" }
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
         ],
         "Giovedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "18:00", "lessonType": "YOGA" }
+            { "time": "18:00", "lessonType": "YOGA" },
         ],
         "Venerdì": [
             { "time": "14:00", "lessonType": "PILATES MATWORK" },
-            { "time": "17:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" }
-        ]
+            { "time": "17:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
+        ],
     };
 
     let currentDate = startDate;
+
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
-            const day = format(currentDate, 'EEEE', { locale: it });
+            const day = format(currentDate, 'EEEE', { locale: it }); // Giorno della settimana in italiano
             if (schedule[day]) {
-                const formattedDate = format(currentDate, 'yyyy-MM-dd');
-                await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
+                const formattedDate = format(currentDate, 'yyyy-MM-dd'); // Data in formato ISO
+                try {
+                    const ref = db.ref(`calendario/${formattedDate}`);
+                    const snapshot = await ref.once('value');
+                    const existingData = snapshot.val();
+
+                    if (!existingData) {
+                        await ref.set(schedule[day]);
+                        console.log(`Dati aggiunti per ${formattedDate}`);
+                    }
+                } catch (error) {
+                    console.error(`Errore durante il popolamento per ${formattedDate}:`, error.message);
+                }
             }
         }
         currentDate = addDays(currentDate, 1);
     }
-    console.log('Calendario popolato su Firebase.');
+    console.log('Calendario popolato con successo.');
 }
 
-// Funzioni Firebase per il calendario
-async function getAvailableSlots(date) {
-    try {
-        const ref = db.ref(`calendario/${date}`);
-        const snapshot = await ref.once('value');
-        const slots = snapshot.val();
-        return slots || [];
-    } catch (error) {
-        console.error(`Errore durante il recupero degli slot disponibili per ${date}:`, error.message);
-        return [];
-    }
+// Funzione per mostrare il prospetto delle lezioni
+function displaySchedule() {
+    return `
+📅 *Prospetto Settimanale delle Lezioni*
+- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE
+- *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
+- *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
+- *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
+- *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
+`;
 }
 
-async function updateAvailableSlots(date, time) {
-    try {
-        const ref = db.ref(`calendario/${date}`);
-        const snapshot = await ref.once('value');
-        const slots = snapshot.val() || [];
-        const updatedSlots = slots.filter((slot) => slot.time !== time);
-        await ref.set(updatedSlots);
-    } catch (error) {
-        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
-    }
-}
-
-// Funzioni per notifiche ed email
+// Funzione per notifiche ed email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -160,18 +159,6 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-// Funzione per mostrare il prospetto delle lezioni
-function displaySchedule() {
-    return `
-📅 *Prospetto Settimanale delle Lezioni*
-- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE
-- *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
-- *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
-- *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
-- *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
-`;
-}
-
 // Configurazione WhatsApp Client
 const client = new Client({ authStrategy: new LocalAuth() });
 
@@ -192,24 +179,76 @@ app.get('/qr', (req, res) => {
     }
 });
 
+// Gestione messaggi WhatsApp
 client.on('message', async (message) => {
     const chatId = message.from;
     const userResponse = message.body.trim();
 
     if (!userStates[chatId]) {
-        userStates[chatId] = { step: 'ask_date', data: {} };
+        userStates[chatId] = { step: 'ask_booking' };
         await message.reply(
             `Vuoi prenotare una lezione? Digita "Sì" o "No".\n${displaySchedule()}`
         );
         return;
     }
 
-    // Gestione messaggi simile al precedente...
+    const userState = userStates[chatId];
+
+    switch (userState.step) {
+        case 'ask_booking':
+            if (userResponse.toLowerCase() === 'sì') {
+                userState.step = 'ask_date';
+                await message.reply('Inserisci la data della lezione (formato: GG/MM/YYYY):');
+            } else if (userResponse.toLowerCase() === 'no') {
+                delete userStates[chatId];
+                await message.reply('Ok, puoi scrivere "prenotazione" se vuoi prenotare in futuro.');
+            } else {
+                await message.reply('Per favore, rispondi con "Sì" o "No".');
+            }
+            break;
+
+        case 'ask_date':
+            const date = validateAndFormatDate(userResponse);
+            if (date) {
+                const slots = await getAvailableSlots(date);
+                if (slots.length > 0) {
+                    userState.data = { date };
+                    userState.step = 'ask_time';
+                    const slotOptions = slots.map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`).join('\n');
+                    await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
+                } else {
+                    await message.reply('Nessun orario disponibile per questa data.');
+                }
+            } else {
+                await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
+            }
+            break;
+
+        case 'ask_time':
+            const timeIndex = parseInt(userResponse, 10) - 1;
+            const slots = await getAvailableSlots(userState.data.date);
+            if (slots[timeIndex]) {
+                const selectedSlot = slots[timeIndex];
+                userState.data = { ...userState.data, ...selectedSlot };
+                await sendEmailNotification(userState.data);
+                await message.reply('Prenotazione completata con successo!');
+                delete userStates[chatId];
+            } else {
+                await message.reply('Orario non valido. Riprova.');
+            }
+            break;
+
+        default:
+            delete userStates[chatId];
+            await message.reply('Errore sconosciuto. Riprova.');
+            break;
+    }
 });
 
+// Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-    await populateCalendar();
+    await populateCalendarWithValidation();
 });
 
 // Monitoraggio risorse
