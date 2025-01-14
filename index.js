@@ -72,9 +72,9 @@ function validateAndFormatDate(input) {
 async function sendWhatsAppNotification(client, phone, bookingData) {
     const message = `
 📋 *Riepilogo Prenotazione*
-👤 Nome: ${bookingData.name || 'N/A'}
-👥 Cognome: ${bookingData.surname || 'N/A'}
-📞 Telefono: ${bookingData.phone || 'N/A'}
+👤 Nome: ${bookingData.name}
+👥 Cognome: ${bookingData.surname}
+📞 Telefono: ${bookingData.phone}
 📅 Data: ${bookingData.date}
 ⏰ Ora: ${bookingData.time}
 📘 Lezione: ${bookingData.lessonType}
@@ -294,9 +294,7 @@ client.on('message', async (message) => {
         if (userResponse === 'prenotazione') {
             disengagedUsers.delete(chatId);
             userStates[chatId] = { step: 'ask_booking' };
-            await message.reply(
-                `Vuoi prenotare una lezione? Digita "Sì" o "No".`
-            );
+            await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".`);
         } else {
             await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
         }
@@ -346,36 +344,59 @@ client.on('message', async (message) => {
             }
             break;
 
-            case 'ask_time':
-                const timeIndex = parseInt(userResponse, 10) - 1;
-                const slots = await getAvailableSlots(userState.data.date);
-            
-                if (slots[timeIndex]) {
-                    const selectedSlot = slots[timeIndex];
-                    const result = await updateAvailableSlots(userState.data.date, selectedSlot.time);
-            
-                    if (result.success) {
-                        userState.data = { ...userState.data, ...selectedSlot };
-                        await sendWhatsAppNotification(client, chatId, userState.data);
-                        await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                        await sendEmailNotification(userState.data);
-                        await message.reply('Prenotazione completata con successo! ✅');
-                        delete userStates[chatId]; // Reset dello stato dell'utente
-                    } else {
-                        await message.reply(result.message);
-                    }
+        case 'ask_time':
+            const timeIndex = parseInt(userResponse, 10) - 1;
+            const slots = await getAvailableSlots(userState.data.date);
+
+            if (slots[timeIndex]) {
+                const selectedSlot = slots[timeIndex];
+                const result = await updateAvailableSlots(userState.data.date, selectedSlot.time);
+
+                if (result.success) {
+                    userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
+                    userState.step = 'ask_name'; // Passa al passo successivo
+                    await message.reply('Perfetto! Ora inserisci il tuo nome:');
                 } else {
-                    await message.reply('Orario non valido. Prova con un altro numero.');
+                    await message.reply(result.message);
                 }
-                break;
-            
+            } else {
+                await message.reply('Orario non valido. Prova con un altro numero.');
+            }
+            break;
+
+        case 'ask_name':
+            userState.data.name = message.body.trim(); // Salva il nome
+            userState.step = 'ask_surname';
+            await message.reply('Inserisci il tuo cognome:');
+            break;
+
+        case 'ask_surname':
+            userState.data.surname = message.body.trim(); // Salva il cognome
+            userState.step = 'ask_phone';
+            await message.reply('Inserisci il tuo numero di telefono:');
+            break;
+
+        case 'ask_phone':
+            const phoneNumber = message.body.trim();
+            if (/^\d{10,15}$/.test(phoneNumber)) { // Valida il numero di telefono
+                userState.data.phone = phoneNumber;
+                await sendWhatsAppNotification(client, chatId, userState.data); // Riepilogo al cliente
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data); // Notifica all'owner
+                await sendEmailNotification(userState.data); // Email all'owner
+                await message.reply('Prenotazione completata con successo! ✅');
+                delete userStates[chatId]; // Resetta lo stato
+            } else {
+                await message.reply('Numero di telefono non valido. Inserisci un numero corretto.');
+            }
+            break;
 
         default:
             await message.reply('Errore sconosciuto. Riprova.');
-            delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
+            delete userStates[chatId]; // Resetta lo stato in caso di errore
             break;
     }
 });
+
 
 
 // Ping per evitare sospensione
