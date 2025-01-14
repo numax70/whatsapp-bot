@@ -135,7 +135,19 @@ async function updateAvailableSlots(date, time) {
     }
 }
 
-// Funzioni per notifiche ed email
+// Funzione per notificare un errore specifico
+function notifySpecificError(errorType) {
+    switch (errorType) {
+        case 'date':
+            return 'Data non valida o non presente. Scegli una data corretta dal calendario.';
+        case 'time':
+            return 'Orario non valido o non disponibile. Scegli un orario corretto tra quelli disponibili.';
+        default:
+            return 'Errore sconosciuto. Riprova.';
+    }
+}
+
+// Funzione per notifiche ed email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -161,24 +173,6 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-async function sendWhatsAppNotification(client, phone, bookingData) {
-    const message = `
-        📋 *Riepilogo Prenotazione*
-        👤 Nome: ${bookingData.name}
-        👥 Cognome: ${bookingData.surname}
-        📞 Telefono: ${bookingData.phone}
-        📅 Data: ${bookingData.date}
-        ⏰ Ora: ${bookingData.time}
-        📘 Lezione: ${bookingData.lessonType}
-    `;
-
-    try {
-        await client.sendMessage(phone, message);
-    } catch (error) {
-        console.error(`Errore nell'invio del messaggio WhatsApp a ${phone}:`, error.message);
-    }
-}
-
 // Configurazione WhatsApp Client
 const client = new Client({ authStrategy: new LocalAuth() });
 
@@ -188,6 +182,16 @@ client.on('qr', (qr) => {
     qrcode.toFile(qrPath, qr, (err) => {
         if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
     });
+});
+
+// Endpoint per il QR Code
+app.get('/qr', (req, res) => {
+    const qrPath = path.join(__dirname, 'qr.png');
+    if (fs.existsSync(qrPath)) {
+        res.sendFile(qrPath);
+    } else {
+        res.status(404).send('QR Code non trovato.');
+    }
 });
 
 // Gestione dei messaggi
@@ -219,10 +223,10 @@ client.on('message', async (message) => {
                         .join('\n');
                     await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
                 } else {
-                    await message.reply('Nessun orario disponibile per questa data.');
+                    await message.reply(notifySpecificError('date'));
                 }
             } else {
-                await message.reply('Data non valida. Inserisci una data valida (esempio: 12 Febbraio 2025, 12/02/2025, 2025-02-12).');
+                await message.reply(notifySpecificError('date'));
             }
             break;
 
@@ -236,12 +240,10 @@ client.on('message', async (message) => {
                 userState.data.phone = chatId; // Salva il numero del cliente
                 await updateAvailableSlots(userState.data.date, selectedSlot.time);
                 await sendEmailNotification(userState.data);
-                await sendWhatsAppNotification(client, chatId, userState.data); // Notifica cliente
-                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data); // Notifica owner
                 delete userStates[chatId];
                 await message.reply('Prenotazione completata con successo!');
             } else {
-                await message.reply('Orario non valido.');
+                await message.reply(notifySpecificError('time'));
             }
             break;
 
@@ -257,7 +259,6 @@ app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
     await populateCalendar();
 });
-const os = require('os');
 
 // Monitoraggio risorse
 setInterval(() => {
@@ -265,7 +266,7 @@ setInterval(() => {
     const cpuLoad = os.loadavg();
     console.log(`RAM Utilizzata: ${(memoryUsage.rss / 1024 / 1024).toFixed(2)} MB`);
     console.log(`CPU Load (1 minuto): ${cpuLoad[0].toFixed(2)}`);
-}, 60000); // Ogni minuto
+}, 60000);
 
 // Endpoint per UptimeRobot (Ping per evitare sospensione)
 app.get('/ping', (req, res) => {
