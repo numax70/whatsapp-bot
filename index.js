@@ -101,30 +101,48 @@ async function populateCalendarWithValidation() {
             { "time": "10:30", "lessonType": "POSTURALE", "remainingSeats": 10 },
             { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
             { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "17:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "18:15", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
         ],
         "martedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
             { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
             { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
             { "time": "18:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "19:00", "lessonType": "YOGA", "remainingSeats": 10 }
         ],
         "mercoledì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
             { "time": "10:30", "lessonType": "POSTURALE", "remainingSeats": 10 },
             { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
             { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "17:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "18:15", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "19:30", "lessonType": "YOGA", "remainingSeats": 10 }
         ],
         "giovedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
             { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
-            { "time": "18:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
-            { "time": "19:00", "lessonType": "YOGA", "remainingSeats": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "18:00", "lessonType": "YOGA", "remainingSeats": 10 }
         ],
         "venerdì": [
-            { "time": "14:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
-            { "time": "15:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 },
-        ],
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "17:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+            { "time": "18:15", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
+        ]
     };
+    
 
     let currentDate = startDate;
 
@@ -470,8 +488,6 @@ client.on('message', async (message) => {
       
     }
 });
-
-
 
 
 // Ping per evitare sospensione
