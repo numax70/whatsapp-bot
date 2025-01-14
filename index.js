@@ -100,7 +100,12 @@ async function populateCalendar() {
             const day = format(currentDate, 'EEEE', { locale: it }).toUpperCase();
             if (schedule[day]) {
                 const formattedDate = format(currentDate, 'yyyy-MM-dd');
-                await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
+                try {
+                    await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
+                    console.log(`Aggiunto al database: ${formattedDate}`);
+                } catch (error) {
+                    console.error(`Errore durante il popolamento del database per ${formattedDate}:`, error.message);
+                }
             }
         }
         currentDate = addDays(currentDate, 1);
