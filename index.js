@@ -17,6 +17,7 @@ const {
     isSunday,
 } = require('date-fns');
 const { it } = require('date-fns/locale');
+const os = require('os');
 
 // Variabili d'ambiente
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
@@ -40,10 +41,7 @@ try {
 }
 
 const db = admin.database();
-
-// Stato utenti
 const userStates = {};
-const disengagedUsers = new Set();
 
 // Configurazione email
 const transporter = nodemailer.createTransport({
@@ -54,15 +52,15 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-// Funzione per validare e formattare la data
+// Funzione per validare e convertire la data
 function validateAndFormatDate(input) {
+    const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
     const today = new Date();
-    const formats = ['dd MMMM yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd'];
 
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
         if (isValid(parsedDate) && isFuture(parsedDate)) {
-            return format(parsedDate, 'yyyy-MM-dd'); // Formatta al formato richiesto
+            return format(parsedDate, 'yyyy-MM-dd');
         }
     }
     return null;
@@ -70,8 +68,8 @@ function validateAndFormatDate(input) {
 
 // Funzione per popolare il calendario su Firebase
 async function populateCalendar() {
-    const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
-    const endDate = new Date(2025, 6, 31); // 31 luglio 2025
+    const startDate = new Date(2025, 0, 1);
+    const endDate = new Date(2025, 6, 31);
 
     const schedule = {
         MONDAY: [
@@ -135,19 +133,7 @@ async function updateAvailableSlots(date, time) {
     }
 }
 
-// Funzione per notificare un errore specifico
-function notifySpecificError(errorType) {
-    switch (errorType) {
-        case 'date':
-            return 'Data non valida o non presente. Scegli una data corretta dal calendario.';
-        case 'time':
-            return 'Orario non valido o non disponibile. Scegli un orario corretto tra quelli disponibili.';
-        default:
-            return 'Errore sconosciuto. Riprova.';
-    }
-}
-
-// Funzione per notifiche ed email
+// Funzioni per notifiche ed email
 async function sendEmailNotification(bookingData) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -168,8 +154,28 @@ async function sendEmailNotification(bookingData) {
 
     try {
         await transporter.sendMail(mailOptions);
+        console.log('Email inviata con successo all\'owner.');
     } catch (error) {
         console.error('Errore nell\'invio dell\'email:', error.message);
+    }
+}
+
+async function sendWhatsAppNotification(client, phone, bookingData) {
+    const message = `
+        📋 *Riepilogo Prenotazione*
+        👤 Nome: ${bookingData.name}
+        👥 Cognome: ${bookingData.surname}
+        📞 Telefono: ${bookingData.phone}
+        📅 Data: ${bookingData.date}
+        ⏰ Ora: ${bookingData.time}
+        📘 Lezione: ${bookingData.lessonType}
+    `;
+
+    try {
+        await client.sendMessage(phone, message);
+        console.log(`Notifica inviata con successo a ${phone}.`);
+    } catch (error) {
+        console.error(`Errore nell'invio della notifica a ${phone}:`, error.message);
     }
 }
 
@@ -184,7 +190,6 @@ client.on('qr', (qr) => {
     });
 });
 
-// Endpoint per il QR Code
 app.get('/qr', (req, res) => {
     const qrPath = path.join(__dirname, 'qr.png');
     if (fs.existsSync(qrPath)) {
@@ -194,13 +199,10 @@ app.get('/qr', (req, res) => {
     }
 });
 
-// Gestione dei messaggi
 client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
     const userResponse = message.body.trim();
-
-    if (chatId === OWNER_PHONE) return;
 
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_date', data: {} };
@@ -218,15 +220,13 @@ client.on('message', async (message) => {
                 if (slots.length > 0) {
                     userState.data.date = date;
                     userState.step = 'ask_time';
-                    const slotOptions = slots
-                        .map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`)
-                        .join('\n');
+                    const slotOptions = slots.map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`).join('\n');
                     await message.reply(`Orari disponibili per ${date}:\n${slotOptions}`);
                 } else {
-                    await message.reply(notifySpecificError('date'));
+                    await message.reply('Nessun orario disponibile per questa data.');
                 }
             } else {
-                await message.reply(notifySpecificError('date'));
+                await message.reply('Data non valida.');
             }
             break;
 
@@ -237,13 +237,15 @@ client.on('message', async (message) => {
                 const selectedSlot = slots[timeIndex];
                 userState.data.time = selectedSlot.time;
                 userState.data.lessonType = selectedSlot.lessonType;
-                userState.data.phone = chatId; // Salva il numero del cliente
+                userState.data.phone = chatId;
                 await updateAvailableSlots(userState.data.date, selectedSlot.time);
                 await sendEmailNotification(userState.data);
+                await sendWhatsAppNotification(client, chatId, userState.data);
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
                 delete userStates[chatId];
                 await message.reply('Prenotazione completata con successo!');
             } else {
-                await message.reply(notifySpecificError('time'));
+                await message.reply('Orario non valido.');
             }
             break;
 
@@ -254,13 +256,11 @@ client.on('message', async (message) => {
     }
 });
 
-// Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
     await populateCalendar();
 });
 
-// Monitoraggio risorse
 setInterval(() => {
     const memoryUsage = process.memoryUsage();
     const cpuLoad = os.loadavg();
@@ -268,7 +268,6 @@ setInterval(() => {
     console.log(`CPU Load (1 minuto): ${cpuLoad[0].toFixed(2)}`);
 }, 60000);
 
-// Endpoint per UptimeRobot (Ping per evitare sospensione)
 app.get('/ping', (req, res) => {
     console.log('Ping ricevuto da UptimeRobot.');
     res.status(200).send('OK');
