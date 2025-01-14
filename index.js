@@ -68,9 +68,9 @@ function validateAndFormatDate(input) {
 }
 
 // Funzione per popolare il calendario su Firebase
-async function populateCalendarWithValidation() {
-    const startDate = new Date(2025, 0, 1);
-    const endDate = new Date(2025, 6, 31);
+async function populateCalendar() {
+    const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
+    const endDate = new Date(2025, 6, 31); // 31 luglio 2025
 
     const schedule = {
         "Lunedì": [
@@ -96,32 +96,32 @@ async function populateCalendarWithValidation() {
     };
 
     let currentDate = startDate;
-
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
             const day = format(currentDate, 'EEEE', { locale: it });
             if (schedule[day]) {
                 const formattedDate = format(currentDate, 'yyyy-MM-dd');
-                try {
-                    const ref = db.ref(`calendario/${formattedDate}`);
-                    const snapshot = await ref.once('value');
-                    const existingData = snapshot.val();
-
-                    if (!existingData) {
-                        await ref.set(schedule[day]);
-                        console.log(`Dati aggiunti per ${formattedDate}`);
-                    }
-                } catch (error) {
-                    console.error(`Errore durante il popolamento per ${formattedDate}:`, error.message);
-                }
+                await db.ref(`calendario/${formattedDate}`).set(schedule[day]);
             }
         }
         currentDate = addDays(currentDate, 1);
     }
-    console.log('Calendario popolato con successo.');
+    console.log('Calendario popolato correttamente.');
 }
 
-// Funzione per notifiche email
+// Funzione per mostrare il prospetto delle lezioni
+async function getSchedule(date) {
+    try {
+        const ref = db.ref(`calendario/${date}`);
+        const snapshot = await ref.once('value');
+        return snapshot.val() || [];
+    } catch (error) {
+        console.error(`Errore nel recupero del prospetto per ${date}:`, error.message);
+        return [];
+    }
+}
+
+// Funzione per notifiche email e riepilogo
 async function sendEmailNotification(data) {
     const emailBody = `
         Nuova prenotazione ricevuta:
@@ -209,15 +209,43 @@ client.on('message', async (message) => {
         case 'ask_date':
             const date = validateAndFormatDate(userResponse);
             if (date) {
-                userState.date = date;
-                userState.step = 'ask_time';
-                await message.reply(`Orari disponibili per ${date}: ...`); // Aggiungi logica per orari
+                const schedule = await getSchedule(date);
+                if (schedule.length > 0) {
+                    userState.date = date;
+                    userState.step = 'ask_time';
+                    const slots = schedule.map((slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`).join('\n');
+                    await message.reply(`Orari disponibili per ${date}:\n${slots}`);
+                } else {
+                    await message.reply('Nessun orario disponibile per questa data.');
+                }
             } else {
                 await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
             }
             break;
 
+        case 'ask_time':
+            const timeIndex = parseInt(userResponse, 10) - 1;
+            const schedule = await getSchedule(userState.date);
+            if (schedule[timeIndex]) {
+                const selectedSlot = schedule[timeIndex];
+                const bookingData = {
+                    name: 'Utente', // Puoi personalizzarlo
+                    surname: 'Generico',
+                    phone: chatId,
+                    date: userState.date,
+                    time: selectedSlot.time,
+                    lessonType: selectedSlot.lessonType,
+                };
+                await sendEmailNotification(bookingData);
+                await message.reply(`Prenotazione completata! Riepilogo:\nData: ${bookingData.date}\nOra: ${bookingData.time}\nLezione: ${bookingData.lessonType}`);
+                delete userStates[chatId];
+            } else {
+                await message.reply('Orario non valido. Riprova.');
+            }
+            break;
+
         default:
+            delete userStates[chatId];
             await message.reply('Errore sconosciuto. Riprova.');
     }
 });
@@ -225,7 +253,7 @@ client.on('message', async (message) => {
 // Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-    await populateCalendarWithValidation();
+    await populateCalendar();
 });
 
 // Ping per evitare sospensione
