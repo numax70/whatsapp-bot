@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const admin = require('firebase-admin'); // Firebase Admin SDK
 const { parse, isValid, isFuture, isWithinInterval, endOfYear, format } = require('date-fns');
 const { it } = require('date-fns/locale');
+const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us'; // Definisci il numero di telefono del proprietario
 
 // Verifica variabili d'ambiente
 if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL) {
