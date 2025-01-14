@@ -97,21 +97,41 @@ async function populateCalendarWithValidation() {
         "lunedì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
             { "time": "10:30", "lessonType": "POSTURALE" },
+            { "time": "11:30", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
+            { "time": "17:00", "lessonType": "PILATES MATWORK" },
+            { "time": "18:00", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
         ],
         "martedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "15:00", "lessonType": "PILATES MATWORK" },
+            { "time": "14:30", "lessonType": "PILATES MATWORK" },
+            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "17:00", "lessonType": "PILATES DANCE BARRE" },
+            { "time": "18:15", "lessonType": "PILATES MATWORK" },
+            { "time": "19:00", "lessonType": "YOGA" },
         ],
         "mercoledì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "10:30", "lessonType": "POSTURALE" },
+            { "time": "11:30", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
+            { "time": "14:30", "lessonType": "PILATES MATWORK" },
+            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "18:15", "lessonType": "PILATES MATWORK" },
         ],
         "giovedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
-            { "time": "18:00", "lessonType": "YOGA" },
+            { "time": "14:30", "lessonType": "PILATES MATWORK" },
+            { "time": "16:00", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "18:00", "lessonType": "PILATES MATWORK" },
+            { "time": "19:00", "lessonType": "YOGA" },
         ],
         "venerdì": [
-            { "time": "14:00", "lessonType": "PILATES MATWORK" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK" },
+            { "time": "10:30", "lessonType": "PILATES EXO CHAIR" },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
+            { "time": "14:30", "lessonType": "PILATES MATWORK" },
             { "time": "17:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
         ],
     };
@@ -120,19 +140,19 @@ async function populateCalendarWithValidation() {
 
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
-            // Ottieni il giorno della settimana in minuscolo
             const day = format(currentDate, 'EEEE', { locale: it }).toLowerCase();
 
             if (schedule[day]) {
-                const formattedDate = format(currentDate, 'yyyy-MM-dd'); // Data in formato ISO
+                const formattedDate = format(currentDate, 'yyyy-MM-dd');
                 try {
                     const ref = db.ref(`calendario/${formattedDate}`);
                     const snapshot = await ref.once('value');
                     const existingData = snapshot.val();
 
                     if (!existingData) {
-                        await ref.set(schedule[day]);
-                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
+                        const slots = schedule[day].map(slot => ({ ...slot, availableSpots: 10 }));
+                        await ref.set(slots);
+                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, slots);
                     } else {
                         console.log(`ℹ️ Dati già esistenti per ${formattedDate}`);
                     }
@@ -235,6 +255,20 @@ async function getAvailableSlots(date) {
     } catch (error) {
         console.error(`Errore nel recupero degli slot disponibili per ${date}:`, error.message);
         return [];
+    }
+}
+
+// Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
+async function updateAvailableSlots(date, time) {
+    try {
+        const ref = db.ref(`calendario/${date}`);
+        const snapshot = await ref.once('value');
+        const slots = snapshot.val() || [];
+        const updatedSlots = slots.filter((slot) => slot.time !== time); // Rimuovi l'orario prenotato
+        await ref.set(updatedSlots); // Aggiorna il database
+        console.log(`Slot aggiornati per ${date}:`, updatedSlots);
+    } catch (error) {
+        console.error(`Errore nell'aggiornamento degli slot per ${date}:`, error.message);
     }
 }
 
