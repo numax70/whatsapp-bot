@@ -55,17 +55,19 @@ const transporter = nodemailer.createTransport({
 
 // Funzione per validare e convertire la data
 function validateAndFormatDate(input) {
-    const formats = ['dd/MM/yyyy', 'dd MMMM yyyy']; // Aggiunto "dd MMMM yyyy" per gestire mesi scritti in lettere
-    const today = new Date();
+    const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
+    const today = new Date(); // Data odierna
+    today.setHours(0, 0, 0, 0); // Azzerare ore, minuti e secondi per confronti solo sulla data
 
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
-        if (isValid(parsedDate) && isFuture(parsedDate)) {
-            return format(parsedDate, 'yyyy-MM-dd'); // Restituisce la data nel formato richiesto per il database
+        if (isValid(parsedDate) && parsedDate >= today) { // Controllo: la data deve essere odierna o futura
+            return format(parsedDate, 'yyyy-MM-dd');
         }
     }
-    return null; // Ritorna null se la data non è valida
+    return null;
 }
+
 
 
 // Funzione per inviare il riepilogo al cliente
@@ -95,35 +97,18 @@ async function populateCalendarWithValidation() {
 
     const schedule = {
         "lunedì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
+            { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "10:30", "lessonType": "POSTURALE", "remainingSeats": 10 },
+            { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
         ],
         "martedì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "GIROKYNESIS" },
+            { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+            { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+            { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+            { "time": "18:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
         ],
-        "mercoledì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
-        ],
-        "giovedì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "GIROKYNESIS" },
-        ],
-        "venerdì": [
-            { "time": "09:30", "lessonType": "PILATES MATWORK" },
-            { "time": "10:30", "lessonType": "POSTURALE" },
-            { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
-            { "time": "13:30", "lessonType": "PILATES DANCE BARRE" },
-        ],
+        // Aggiungi i dati per gli altri giorni
     };
 
     let currentDate = startDate;
@@ -131,26 +116,30 @@ async function populateCalendarWithValidation() {
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
             const day = format(currentDate, 'EEEE', { locale: it }).toLowerCase();
-            const formattedDate = format(currentDate, 'yyyy-MM-dd');
 
             if (schedule[day]) {
+                const formattedDate = format(currentDate, 'yyyy-MM-dd');
                 try {
                     const ref = db.ref(`calendario/${formattedDate}`);
-                    await ref.set(schedule[day]); // Sovrascrive i dati esistenti con quelli nuovi
-                    console.log(`✅ Dati aggiunti o aggiornati per ${formattedDate}:`, schedule[day]);
+                    const snapshot = await ref.once('value');
+                    const existingData = snapshot.val();
+
+                    if (!existingData) {
+                        await ref.set(schedule[day]);
+                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
+                    } else {
+                        console.log(`ℹ️ Dati già esistenti per ${formattedDate}`);
+                    }
                 } catch (error) {
                     console.error(`❌ Errore durante il popolamento per ${formattedDate}:`, error.message);
                 }
-            } else {
-                console.warn(`⚠️ Nessun orario programmato per il giorno ${day}`);
             }
-        } else {
-            console.log(`⏭ Giorno saltato (weekend): ${format(currentDate, 'yyyy-MM-dd')}`);
         }
         currentDate = addDays(currentDate, 1);
     }
     console.log('🎉 Calendario popolato con successo.');
 }
+
 
 
 
@@ -255,38 +244,38 @@ async function getAvailableSlots(date) {
 
 
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
-async function updateAvailableSlots(date, time, name, phone) {
+async function updateAvailableSlots(date, time) {
     try {
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val();
 
         if (!slots) {
-            return { success: false, message: 'Nessuno slot trovato per questa data.' };
+            return { success: false, message: 'Non ci sono slot disponibili per questa data.' };
         }
 
         const updatedSlots = slots.map((slot) => {
             if (slot.time === time) {
-                if (slot.remaining > 0) {
-                    return {
-                        ...slot,
-                        remaining: slot.remaining - 1,
-                        bookings: [...(slot.bookings || []), { name, phone }]
-                    };
-                } else {
+                if (!slot.remainingSeats || slot.remainingSeats <= 0) {
                     throw new Error('Non ci sono più posti disponibili per questo slot.');
                 }
+                // Decrementa i posti disponibili
+                return {
+                    ...slot,
+                    remainingSeats: slot.remainingSeats - 1,
+                };
             }
             return slot;
         });
 
-        await ref.set(updatedSlots);
-        return { success: true, message: 'Slot aggiornato con successo.' };
+        await ref.set(updatedSlots); // Aggiorna il database
+        return { success: true };
     } catch (error) {
         console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
-        return { success: false, message: 'Errore durante l\'aggiornamento degli slot.' };
+        return { success: false, message: error.message };
     }
 }
+
 
 
 
@@ -339,80 +328,90 @@ client.on('message', async (message) => {
                     const slots = await getAvailableSlots(date);
                     if (slots.length > 0) {
                         userState.data = { date }; // Salva la data
-                        userState.step = 'ask_time'; // Passa allo stato successivo
-            
-                        // Genera il messaggio con il prospetto
+                        userState.step = 'ask_time'; // Aggiorna lo stato
                         const slotOptions = slots.map(
-                            (slot) => `${slot.index}) ${slot.time} - ${slot.lessonType} (Posti disponibili: ${slot.remaining})`
+                            (slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`
                         ).join('\n');
-            
-                        await message.reply(`Ecco le lezioni disponibili per ${date}:\n${slotOptions}\nScegli un numero corrispondente alla lezione.`);
+                        await message.reply(`Orari disponibili per ${date}:\n${slotOptions}\nScegli un numero corrispondente alla lezione.`);
                     } else {
                         await message.reply('Nessuna lezione disponibile per questa data. Prova con un\'altra data.');
                     }
                 } else {
-                    await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
+                    await message.reply('Data non valida o antecedente alla data odierna. Inserisci una data valida (formato: GG/MM/YYYY).');
                 }
                 break;
             
+                case 'ask_time':
+                    const timeIndex = parseInt(userResponse, 10) - 1;
+                    const slots = await getAvailableSlots(userState.data.date);
+                
+                    if (slots[timeIndex]) {
+                        const selectedSlot = slots[timeIndex];
+                        userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
+                        userState.step = 'ask_name'; // Passa alla fase successiva
+                        await message.reply('Inserisci il tuo nome:');
+                    } else {
+                        await message.reply('Orario non valido. Prova con un altro numero.');
+                    }
+                    break;
+                
+                case 'ask_name':
+                    if (userResponse.trim().length > 0) { // Verifica che il nome non sia vuoto
+                        userState.data.name = userResponse.trim(); // Salva il nome
+                        userState.step = 'ask_surname'; // Passa alla richiesta del cognome
+                        await message.reply('Perfetto! Ora inserisci il tuo cognome:');
+                    } else {
+                        await message.reply('Per favore, inserisci un nome valido.');
+                    }
+                    break;
+                
+                case 'ask_surname':
+                    if (userResponse.trim().length > 0) { // Verifica che il cognome non sia vuoto
+                        userState.data.surname = userResponse.trim(); // Salva il cognome
+                        userState.step = 'ask_phone'; // Passa alla richiesta del numero di telefono
+                        await message.reply('Inserisci il tuo numero di telefono:');
+                    } else {
+                        await message.reply('Per favore, inserisci un cognome valido.');
+                    }
+                    break;
+                
+                case 'ask_phone':
+                    if (/^\d+$/.test(userResponse.trim())) { // Verifica che il numero sia composto solo da cifre
+                        userState.data.phone = userResponse.trim(); // Salva il numero di telefono
+                
+                        // Aggiorna lo slot nel database
+                        const result = await updateAvailableSlots(
+                            userState.data.date,
+                            userState.data.time,
+                            userState.data.name,
+                            userState.data.surname, // Includi il cognome
+                            userState.data.phone
+                        );
+                
+                        if (result.success) {
+                            // Invia riepilogo
+                            await sendWhatsAppNotification(client, chatId, userState.data);
+                            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                            await sendEmailNotification(userState.data);
+                
+                            await message.reply('Prenotazione completata con successo! ✅');
+                        } else {
+                            await message.reply(result.message);
+                        }
+                
+                        delete userStates[chatId]; // Reset dello stato dell'utente
+                    } else {
+                        await message.reply('Per favore, inserisci un numero di telefono valido.');
+                    }
+                    break;
+                
+                default:
+                    await message.reply('Errore sconosciuto. Riprova.');
+                    delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
+                    break;
+                
 
-        case 'ask_time':
-            const timeIndex = parseInt(userResponse, 10) - 1;
-            const slots = await getAvailableSlots(userState.data.date);
-
-            if (slots[timeIndex]) {
-                const selectedSlot = slots[timeIndex];
-                userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
-                userState.step = 'ask_name'; // Passa alla fase successiva
-                await message.reply('Inserisci il tuo nome:');
-            } else {
-                await message.reply('Orario non valido. Prova con un altro numero.');
-            }
-            break;
-
-        case 'ask_name':
-            if (userResponse) {
-                userState.data.name = userResponse; // Salva il nome
-                userState.step = 'ask_phone';
-                await message.reply('Inserisci il tuo numero di telefono:');
-            } else {
-                await message.reply('Per favore, inserisci un nome valido.');
-            }
-            break;
-
-        case 'ask_phone':
-            if (/^\d+$/.test(userResponse)) { // Verifica che il numero sia valido
-                userState.data.phone = userResponse; // Salva il numero di telefono
-
-                // Aggiorna lo slot nel database
-                const result = await updateAvailableSlots(
-                    userState.data.date,
-                    userState.data.time,
-                    userState.data.name,
-                    userState.data.phone
-                );
-
-                if (result.success) {
-                    // Invia riepilogo
-                    await sendWhatsAppNotification(client, chatId, userState.data);
-                    await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                    await sendEmailNotification(userState.data);
-
-                    await message.reply('Prenotazione completata con successo! ✅');
-                } else {
-                    await message.reply(result.message);
-                }
-
-                delete userStates[chatId]; // Reset dello stato dell'utente
-            } else {
-                await message.reply('Per favore, inserisci un numero di telefono valido.');
-            }
-            break;
-
-        default:
-            await message.reply('Errore sconosciuto. Riprova.');
-            delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
-            break;
+      
     }
 });
 
