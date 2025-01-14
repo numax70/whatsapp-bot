@@ -68,7 +68,39 @@ function validateAndFormatDate(input) {
     return null;
 }
 
+function getAvailableDisciplines(schedule) {
+    const disciplines = Object.values(schedule).flatMap(day =>
+        day.map(slot => slot.lessonType)
+    );
+    return [...new Set(disciplines)];
+}
 
+function getAvailableTimesForDiscipline(schedule, discipline) {
+    const times = [];
+    for (const day of Object.values(schedule)) {
+        for (const slot of day) {
+            if (slot.lessonType === discipline) {
+                times.push(slot.time);
+            }
+        }
+    }
+    return [...new Set(times)];
+}
+
+function getDatesForDisciplineAndTime(schedule, discipline, time) {
+    const dates = [];
+    for (const [date, slots] of Object.entries(schedule)) {
+        if (slots.some(slot => slot.lessonType === discipline && slot.time === time)) {
+            dates.push(date);
+        }
+    }
+    return dates;
+}
+
+function findNextAvailableDate(schedule, inputDate, discipline, time) {
+    const dates = getDatesForDisciplineAndTime(schedule, discipline, time);
+    return dates.find(date => new Date(date) >= new Date(inputDate));
+}
 
 // Funzione per inviare il riepilogo al cliente
 async function sendWhatsAppNotification(client, phone, bookingData) {
@@ -216,10 +248,6 @@ async function migrateRemainingSeats() {
     }
 }
 
-
-
-
-
 // Funzione per mostrare il prospetto delle lezioni
 async function getSchedule(date) {
     try {
@@ -318,6 +346,140 @@ async function getAvailableSlots(date) {
 }
 
 
+
+// Gestione messaggi WhatsApp
+client.on('message', async (message) => {
+    const chatId = message.from;
+    const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
+
+    // Se l'utente è disimpegnato
+    if (disengagedUsers.has(chatId)) {
+        if (userResponse === 'prenotazione') {
+            disengagedUsers.delete(chatId);
+            userStates[chatId] = { step: 'ask_discipline' };  // Inizia con la richiesta della disciplina
+            const disciplines = getAvailableDisciplines(schedule);
+            await message.reply(`Ecco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli il numero della disciplina.`);
+       
+        } else {
+            await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
+        }
+        return;
+    }
+
+    // Se l'utente non ha uno stato attivo, inizializza
+    if (!userStates[chatId]) {
+        userStates[chatId] = { step: 'ask_discipline' };
+        const disciplines = getAvailableDisciplines(schedule);
+        await message.reply(`Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli il numero della disciplina.`);
+        return;
+    }
+
+    const userState = userStates[chatId];
+
+    // Gestione del flusso
+    switch (userState.step) {
+        case 'ask_discipline':
+            const disciplines = getAvailableDisciplines(schedule);
+            const disciplineIndex = parseInt(userResponse, 10) - 1;
+            if (disciplines[disciplineIndex]) {
+                userState.data = { discipline: disciplines[disciplineIndex] };
+                userState.step = 'ask_time';
+            } else {
+                await message.reply('Disciplina non valida. Riprova con un numero valido.');
+          
+            }
+            break;
+
+            case 'ask_time':
+                const times = getAvailableTimesForDiscipline(schedule, userState.data.discipline);
+                const timeIndex = parseInt(userResponse, 10) - 1;
+    
+                if (times[timeIndex]) {
+                    userState.data.time = times[timeIndex];
+                    userState.step = 'ask_date';
+                    await message.reply(`Inserisci una data valida (formato: GG/MM/YYYY) o digita "oggi" per cercare la prossima data disponibile per ${userState.data.discipline} alle ${userState.data.time}.`);
+                } else {
+                    await message.reply('Orario non valido. Riprova con un numero valido.');
+                }
+                    break;
+
+            case 'ask_date':
+                const date = validateAndFormatDate(userResponse);
+                const inputDate = userResponse === 'oggi' ? format(new Date(), 'yyyy-MM-dd') : validateAndFormatDate(userResponse);
+
+                if (inputDate) {
+                    const nextDate = findNextAvailableDate(schedule, inputDate, userState.data.discipline, userState.data.time);
+                    if (nextDate) {
+                        userState.data.date = nextDate;
+                        userState.step = 'ask_name';
+                        await message.reply(`La prossima data disponibile è ${nextDate}. Inserisci il tuo nome per continuare:`);
+                    } else {
+                        await message.reply('Nessuna data disponibile per questa combinazione. Prova con una nuova data o disciplina.');
+                    }
+                } else {
+                    await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
+                }
+                break;
+            
+                
+                
+                case 'ask_name':
+                    if (userResponse.trim().length > 0) { // Verifica che il nome non sia vuoto
+                        userState.data.name = userResponse.trim(); // Salva il nome
+                        userState.step = 'ask_surname'; // Passa alla richiesta del cognome
+                        await message.reply('Perfetto! Ora inserisci il tuo cognome:');
+                    } else {
+                        await message.reply('Per favore, inserisci un nome valido.');
+                    }
+                    break;
+                
+                case 'ask_surname':
+                    if (userResponse.trim().length > 0) { // Verifica che il cognome non sia vuoto
+                        userState.data.surname = userResponse.trim(); // Salva il cognome
+                        userState.step = 'ask_phone'; // Passa alla richiesta del numero di telefono
+                        await message.reply('Inserisci il tuo numero di telefono:');
+                    } else {
+                        await message.reply('Per favore, inserisci un cognome valido.');
+                    }
+                    break;
+                
+                case 'ask_phone':
+                    if (/^\d+$/.test(userResponse.trim())) { // Verifica che il numero sia composto solo da cifre
+                        userState.data.phone = userResponse.trim(); // Salva il numero di telefono
+                
+                        // Aggiorna lo slot nel database
+                        const result = await updateAvailableSlots(
+                            userState.data.date,
+                            userState.data.time,
+                        );
+                
+                        if (result.success) {
+                            // Invia riepilogo
+                            await sendWhatsAppNotification(client, chatId, userState.data);
+                            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                            await sendEmailNotification(userState.data);
+                
+                            await message.reply('Prenotazione completata con successo! ✅');
+                        } else {
+                            await message.reply(result.message);
+                        }
+                
+                        delete userStates[chatId]; // Reset dello stato dell'utente
+                    } else {
+                        await message.reply('Per favore, inserisci un numero di telefono valido.');
+                    }
+                    break;
+                
+                default:
+                    await message.reply('Errore sconosciuto. Riprova.');
+                    delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
+                    break;
+                
+
+      
+    }
+});
+
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
 async function updateAvailableSlots(date, time) {
     try {
@@ -350,145 +512,6 @@ async function updateAvailableSlots(date, time) {
         return { success: false, message: error.message };
     }
 }
-
-
-
-
-// Gestione messaggi WhatsApp
-client.on('message', async (message) => {
-    const chatId = message.from;
-    const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
-
-    // Se l'utente è disimpegnato
-    if (disengagedUsers.has(chatId)) {
-        if (userResponse === 'prenotazione') {
-            disengagedUsers.delete(chatId);
-            userStates[chatId] = { step: 'ask_booking' };
-            await message.reply(
-                `Vuoi prenotare una lezione? Digita "Sì" o "No".`
-            );
-        } else {
-            await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
-        }
-        return;
-    }
-
-    // Se l'utente non ha uno stato attivo, inizializza
-    if (!userStates[chatId]) {
-        userStates[chatId] = { step: 'ask_booking' };
-        await message.reply(`Vuoi prenotare una lezione? Digita "Sì" o "No".\n${displaySchedule()}`);
-        return;
-    }
-
-    const userState = userStates[chatId];
-
-    // Gestione del flusso
-    switch (userState.step) {
-        case 'ask_booking':
-            if (userResponse === 'sì' || userResponse === 'si') {
-                userState.step = 'ask_date'; // Aggiorna lo stato
-                await message.reply('Inserisci la data della lezione (formato: GG/MM/YYYY):');
-            } else if (userResponse === 'no') {
-                disengagedUsers.add(chatId); // Aggiungi l'utente alla lista disimpegnata
-                delete userStates[chatId]; // Rimuovi lo stato
-                await message.reply('Ok, puoi scrivere "prenotazione" in qualsiasi momento.');
-            } else {
-                await message.reply('Per favore, rispondi con "Sì" o "No".');
-            }
-            break;
-
-            case 'ask_date':
-                const date = validateAndFormatDate(userResponse);
-                if (date) {
-                    const slots = await getAvailableSlots(date);
-                    if (slots.length > 0) {
-                        userState.data = { date }; // Salva la data
-                        userState.step = 'ask_time'; // Aggiorna lo stato
-                        const slotOptions = slots.map(
-                            (slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`
-                        ).join('\n');
-                        await message.reply(`Orari disponibili per ${date}:\n${slotOptions}\nScegli un numero corrispondente alla lezione.`);
-                    } else {
-                        await message.reply('Nessuna lezione disponibile per questa data. Prova con un\'altra data.');
-                    }
-                } else {
-                    await message.reply('Data non valida o antecedente alla data odierna. Inserisci una data valida (formato: GG/MM/YYYY).');
-                }
-                break;
-            
-                case 'ask_time':
-                    const timeIndex = parseInt(userResponse, 10) - 1;
-                    const slots = await getAvailableSlots(userState.data.date);
-                
-                    if (slots[timeIndex]) {
-                        const selectedSlot = slots[timeIndex];
-                        userState.data = { ...userState.data, ...selectedSlot }; // Salva i dettagli della prenotazione
-                        userState.step = 'ask_name'; // Passa alla fase successiva
-                        await message.reply('Inserisci il tuo nome:');
-                    } else {
-                        await message.reply('Orario non valido. Prova con un altro numero.');
-                    }
-                    break;
-                
-                case 'ask_name':
-                    if (userResponse.trim().length > 0) { // Verifica che il nome non sia vuoto
-                        userState.data.name = userResponse.trim(); // Salva il nome
-                        userState.step = 'ask_surname'; // Passa alla richiesta del cognome
-                        await message.reply('Perfetto! Ora inserisci il tuo cognome:');
-                    } else {
-                        await message.reply('Per favore, inserisci un nome valido.');
-                    }
-                    break;
-                
-                case 'ask_surname':
-                    if (userResponse.trim().length > 0) { // Verifica che il cognome non sia vuoto
-                        userState.data.surname = userResponse.trim(); // Salva il cognome
-                        userState.step = 'ask_phone'; // Passa alla richiesta del numero di telefono
-                        await message.reply('Inserisci il tuo numero di telefono:');
-                    } else {
-                        await message.reply('Per favore, inserisci un cognome valido.');
-                    }
-                    break;
-                
-                case 'ask_phone':
-                    if (/^\d+$/.test(userResponse.trim())) { // Verifica che il numero sia composto solo da cifre
-                        userState.data.phone = userResponse.trim(); // Salva il numero di telefono
-                
-                        // Aggiorna lo slot nel database
-                        const result = await updateAvailableSlots(
-                            userState.data.date,
-                            userState.data.time,
-                            userState.data.name,
-                            userState.data.surname, // Includi il cognome
-                            userState.data.phone
-                        );
-                
-                        if (result.success) {
-                            // Invia riepilogo
-                            await sendWhatsAppNotification(client, chatId, userState.data);
-                            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                            await sendEmailNotification(userState.data);
-                
-                            await message.reply('Prenotazione completata con successo! ✅');
-                        } else {
-                            await message.reply(result.message);
-                        }
-                
-                        delete userStates[chatId]; // Reset dello stato dell'utente
-                    } else {
-                        await message.reply('Per favore, inserisci un numero di telefono valido.');
-                    }
-                    break;
-                
-                default:
-                    await message.reply('Errore sconosciuto. Riprova.');
-                    delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
-                    break;
-                
-
-      
-    }
-});
 
 
 // Ping per evitare sospensione
