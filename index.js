@@ -73,23 +73,23 @@ async function populateCalendarWithValidation() {
     const endDate = new Date(2025, 6, 31); // 31 luglio 2025
 
     const schedule = {
-        "Lunedì": [
+        "lunedì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
             { "time": "10:30", "lessonType": "POSTURALE" },
         ],
-        "Martedì": [
+        "martedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
             { "time": "15:00", "lessonType": "PILATES MATWORK" },
         ],
-        "Mercoledì": [
+        "mercoledì": [
             { "time": "09:30", "lessonType": "PILATES MATWORK" },
             { "time": "12:00", "lessonType": "PILATES EXO CHAIR" },
         ],
-        "Giovedì": [
+        "giovedì": [
             { "time": "13:30", "lessonType": "GIROKYNESIS" },
             { "time": "18:00", "lessonType": "YOGA" },
         ],
-        "Venerdì": [
+        "venerdì": [
             { "time": "14:00", "lessonType": "PILATES MATWORK" },
             { "time": "17:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT" },
         ],
@@ -99,8 +99,8 @@ async function populateCalendarWithValidation() {
 
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
-            // Ottieni il giorno della settimana nel formato "Lunedì", "Martedì", ecc.
-            const day = format(currentDate, 'EEEE', { locale: it });
+            // Ottieni il giorno della settimana in minuscolo
+            const day = format(currentDate, 'EEEE', { locale: it }).toLowerCase();
 
             if (schedule[day]) {
                 const formattedDate = format(currentDate, 'yyyy-MM-dd'); // Data in formato ISO
@@ -111,20 +111,22 @@ async function populateCalendarWithValidation() {
 
                     if (!existingData) {
                         await ref.set(schedule[day]);
-                        console.log(`Dati aggiunti per ${formattedDate}`);
+                        console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
+                    } else {
+                        console.log(`ℹ️ Dati già esistenti per ${formattedDate}`);
                     }
                 } catch (error) {
-                    console.error(`Errore durante il popolamento per ${formattedDate}:`, error.message);
+                    console.error(`❌ Errore durante il popolamento per ${formattedDate}:`, error.message);
                 }
             } else {
-                console.log(`Nessun orario programmato per il giorno ${day}`);
+                console.warn(`⚠️ Nessun orario programmato per il giorno ${day}`);
             }
         } else {
-            console.log(`Giorno saltato (weekend): ${format(currentDate, 'yyyy-MM-dd')}`);
+            console.log(`⏭ Giorno saltato (weekend): ${format(currentDate, 'yyyy-MM-dd')}`);
         }
         currentDate = addDays(currentDate, 1);
     }
-    console.log('Calendario popolato con successo.');
+    console.log('🎉 Calendario popolato con successo.');
 }
 
 
