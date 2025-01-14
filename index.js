@@ -264,13 +264,26 @@ async function updateAvailableSlots(date, time) {
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val() || [];
-        const updatedSlots = slots.filter((slot) => slot.time !== time); // Rimuovi l'orario prenotato
-        await ref.set(updatedSlots); // Aggiorna il database
-        console.log(`Slot aggiornati per ${date}:`, updatedSlots);
+
+        const updatedSlots = slots.map((slot) => {
+            if (slot.time === time) {
+                // Riduci il numero di posti disponibili
+                if (slot.availableSpots > 0) {
+                    return { ...slot, availableSpots: slot.availableSpots - 1 };
+                } else {
+                    console.warn(`⚠️ Nessun posto disponibile per l'orario ${time} del ${date}`);
+                }
+            }
+            return slot;
+        });
+
+        await ref.set(updatedSlots);
+        console.log(`✅ Slot aggiornati per ${date} - Orario: ${time}`);
     } catch (error) {
-        console.error(`Errore nell'aggiornamento degli slot per ${date}:`, error.message);
+        console.error(`❌ Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
     }
 }
+
 
 
 // Gestione messaggi WhatsApp
