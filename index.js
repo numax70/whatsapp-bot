@@ -104,25 +104,6 @@ async function sendEmailNotification(bookingData) {
     }
 }
 
-// Funzione per inviare notifiche e promemoria
-async function sendFinalNotification(client, bookingData) {
-    const summary = `
-        Prenotazione completata:
-        - Nome: ${bookingData.name}
-        - Cognome: ${bookingData.surname}
-        - Telefono: ${bookingData.phone}
-        - Data: ${bookingData.date}
-        - Ora: ${bookingData.time}
-    `;
-    try {
-        console.log(`Invio notifica finale a ${OWNER_PHONE}:\n${summary}`);
-        await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:\n${summary}`);
-        console.log('Notifica finale inviata con successo.');
-    } catch (error) {
-        console.error(`Errore nell'invio della notifica finale a ${OWNER_PHONE}:`, error.message);
-    }
-}
-
 // Funzioni di validazione
 function validateAndFormatDate(input) {
     const today = new Date();
@@ -149,7 +130,33 @@ client.on('qr', (qr) => {
     });
 });
 
-// Gestione dei messaggi
+// Rotta per ottenere il QR Code
+app.get('/qr', (req, res) => {
+    const qrPath = path.join(__dirname, 'qr.png');
+    fs.access(qrPath, fs.constants.R_OK, (err) => {
+        if (err) {
+            console.error('Il QR Code non è disponibile:', err.message);
+            res.status(404).send('QR Code non trovato.');
+        } else {
+            res.sendFile(qrPath);
+            console.log('QR Code inviato con successo.');
+        }
+    });
+});
+
+// Rotta ping per uptime
+app.get('/ping', (req, res) => {
+    console.log('Ping ricevuto da UptimeRobot.');
+    res.status(200).send('OK');
+});
+
+app.get('/', (req, res) => res.send('Il bot è attivo!'));
+
+// Avvio del server
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Server in ascolto sulla porta ${PORT}`));
+
+// Gestione dei messaggi WhatsApp
 client.on('message', async (message) => {
     console.log(`Messaggio ricevuto da ${message.from}: ${message.body}`);
     const chatId = message.from;
@@ -177,9 +184,11 @@ client.on('message', async (message) => {
     }
 });
 
-// Avvio del server
-app.listen(process.env.PORT || 10000, () => console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`));
-
 // Riconnessione automatica
-client.on('disconnected', () => client.initialize());
+client.on('disconnected', (reason) => {
+    console.log(`Bot disconnesso: ${reason}`);
+    client.initialize();
+});
+
+client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 client.initialize();
