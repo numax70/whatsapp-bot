@@ -96,12 +96,14 @@ async function populateCalendarWithValidation() {
     };
 
     let currentDate = startDate;
-    console.log('Inizio popolamento del calendario...');
+
     while (currentDate <= endDate) {
         if (!isSaturday(currentDate) && !isSunday(currentDate)) {
+            // Ottieni il giorno della settimana nel formato "Lunedì", "Martedì", ecc.
             const day = format(currentDate, 'EEEE', { locale: it });
+
             if (schedule[day]) {
-                const formattedDate = format(currentDate, 'yyyy-MM-dd');
+                const formattedDate = format(currentDate, 'yyyy-MM-dd'); // Data in formato ISO
                 try {
                     const ref = db.ref(`calendario/${formattedDate}`);
                     const snapshot = await ref.once('value');
@@ -109,23 +111,22 @@ async function populateCalendarWithValidation() {
 
                     if (!existingData) {
                         await ref.set(schedule[day]);
-                        console.log(`Dati aggiunti per ${formattedDate}:`, schedule[day]);
-                    } else {
-                        console.log(`Dati già esistenti per ${formattedDate}:`, existingData);
+                        console.log(`Dati aggiunti per ${formattedDate}`);
                     }
                 } catch (error) {
                     console.error(`Errore durante il popolamento per ${formattedDate}:`, error.message);
                 }
             } else {
-                console.warn(`Nessun orario programmato per il giorno ${day}`);
+                console.log(`Nessun orario programmato per il giorno ${day}`);
             }
         } else {
-            console.log(`Giorno saltato (weekend):`, format(currentDate, 'yyyy-MM-dd'));
+            console.log(`Giorno saltato (weekend): ${format(currentDate, 'yyyy-MM-dd')}`);
         }
         currentDate = addDays(currentDate, 1);
     }
     console.log('Calendario popolato con successo.');
 }
+
 
 
 // Funzione per mostrare il prospetto delle lezioni
@@ -186,16 +187,7 @@ app.get('/qr', (req, res) => {
         res.status(404).send('QR Code non trovato.');
     }
 });
-app.get('/test-db', async (req, res) => {
-    try {
-        await db.ref('test').set({ message: 'Test di scrittura riuscito' });
-        console.log('Scrittura di test nel database riuscita.');
-        res.send('Scrittura riuscita nel database Firebase.');
-    } catch (error) {
-        console.error('Errore durante la scrittura nel database:', error.message);
-        res.status(500).send('Scrittura nel database fallita.');
-    }
-});
+
 
 // Gestione messaggi WhatsApp
 client.on('message', async (message) => {
