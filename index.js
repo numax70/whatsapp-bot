@@ -31,15 +31,11 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL:
-            'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
+        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
-    console.error(
-        "Errore durante l'inizializzazione di Firebase:",
-        error.message
-    );
+    console.error("Errore durante l'inizializzazione di Firebase:", error.message);
     process.exit(1);
 }
 
@@ -122,10 +118,7 @@ async function getAvailableSlots(date) {
         const slots = snapshot.val();
         return slots || [];
     } catch (error) {
-        console.error(
-            `Errore durante il recupero degli slot disponibili per ${date}:`,
-            error.message
-        );
+        console.error(`Errore durante il recupero degli slot disponibili per ${date}:`, error.message);
         return [];
     }
 }
@@ -138,10 +131,7 @@ async function updateAvailableSlots(date, time) {
         const updatedSlots = slots.filter((slot) => slot.time !== time);
         await ref.set(updatedSlots);
     } catch (error) {
-        console.error(
-            `Errore durante l'aggiornamento degli slot per ${date}:`,
-            error.message
-        );
+        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
     }
 }
 
@@ -168,6 +158,24 @@ async function sendEmailNotification(bookingData) {
         await transporter.sendMail(mailOptions);
     } catch (error) {
         console.error('Errore nell\'invio dell\'email:', error.message);
+    }
+}
+
+async function sendWhatsAppNotification(client, phone, bookingData) {
+    const message = `
+        📋 *Riepilogo Prenotazione*
+        👤 Nome: ${bookingData.name}
+        👥 Cognome: ${bookingData.surname}
+        📞 Telefono: ${bookingData.phone}
+        📅 Data: ${bookingData.date}
+        ⏰ Ora: ${bookingData.time}
+        📘 Lezione: ${bookingData.lessonType}
+    `;
+
+    try {
+        await client.sendMessage(phone, message);
+    } catch (error) {
+        console.error(`Errore nell'invio del messaggio WhatsApp a ${phone}:`, error.message);
     }
 }
 
@@ -225,8 +233,11 @@ client.on('message', async (message) => {
                 const selectedSlot = slots[timeIndex];
                 userState.data.time = selectedSlot.time;
                 userState.data.lessonType = selectedSlot.lessonType;
+                userState.data.phone = chatId; // Salva il numero del cliente
                 await updateAvailableSlots(userState.data.date, selectedSlot.time);
                 await sendEmailNotification(userState.data);
+                await sendWhatsAppNotification(client, chatId, userState.data); // Notifica cliente
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data); // Notifica owner
                 delete userStates[chatId];
                 await message.reply('Prenotazione completata con successo!');
             } else {
