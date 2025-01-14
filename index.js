@@ -90,6 +90,15 @@ async function sendWhatsAppNotification(client, phone, bookingData) {
     }
 }
 
+async function clearCalendar() {
+    try {
+        await db.ref('calendario').remove();
+        console.log('✅ Calendario cancellato con successo.');
+    } catch (error) {
+        console.error('❌ Errore durante la cancellazione del calendario:', error.message);
+    }
+}
+
 // Funzione per popolare il calendario su Firebase
 async function populateCalendarWithValidation() {
     const startDate = new Date(2025, 0, 1); // 1 gennaio 2025
@@ -157,7 +166,7 @@ async function populateCalendarWithValidation() {
                     const snapshot = await ref.once('value');
                     let existingData = snapshot.val();
 
-                    if (!existingData) {
+                    if (!existingData || existingData.length !== schedule[day].length) {
                         // Se non esistono dati, inizializza con la struttura dello schedule
                         await ref.set(schedule[day]);
                         console.log(`✅ Dati aggiunti per ${formattedDate}:`, schedule[day]);
@@ -505,6 +514,7 @@ client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
 // Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
+    await clearCalendar();
     await populateCalendarWithValidation();
     await migrateRemainingSeats();
 });
