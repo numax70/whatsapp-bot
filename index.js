@@ -223,6 +223,7 @@ function displaySchedule() {
 }
 
 // Gestione messaggi WhatsApp
+// Gestione messaggi WhatsApp
 client.on('message', async (message) => {
     const chatId = message.from;
     const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
@@ -254,11 +255,11 @@ client.on('message', async (message) => {
     switch (userState.step) {
         case 'ask_booking':
             if (userResponse === 'sì' || userResponse === 'si') {
-                userState.step = 'ask_date';
+                userState.step = 'ask_date'; // Aggiorna lo stato
                 await message.reply('Inserisci la data della lezione (formato: GG/MM/YYYY):');
             } else if (userResponse === 'no') {
-                disengagedUsers.add(chatId);
-                delete userStates[chatId];
+                disengagedUsers.add(chatId); // Aggiungi l'utente alla lista disimpegnata
+                delete userStates[chatId]; // Rimuovi lo stato
                 await message.reply('Ok, puoi scrivere "prenotazione" in qualsiasi momento.');
             } else {
                 await message.reply('Per favore, rispondi con "Sì" o "No".');
@@ -271,7 +272,7 @@ client.on('message', async (message) => {
                 const slots = await getAvailableSlots(date);
                 if (slots.length > 0) {
                     userState.data = { date }; // Salva la data
-                    userState.step = 'ask_time';
+                    userState.step = 'ask_time'; // Aggiorna lo stato
                     const slotOptions = slots.map(
                         (slot, index) => `${index + 1}) ${slot.time} (${slot.lessonType})`
                     ).join('\n');
@@ -307,6 +308,7 @@ client.on('message', async (message) => {
             break;
     }
 });
+
 
 
 
