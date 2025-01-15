@@ -100,12 +100,52 @@ function validateAndFormatDate(input) {
 
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
-        if (isValid(parsedDate) && parsedDate >= today) { // Controllo: la data deve essere odierna o futura
-            return format(parsedDate, 'yyyy-MM-dd');
+
+        if (!isValid(parsedDate)) {
+            continue; // Passa al prossimo formato se la data non è valida
         }
+
+        // Controllo: la data deve essere odierna o futura
+        if (parsedDate < today) {
+            return {
+                isValid: false,
+                message: 'Non è possibile inserire una data passata. Inserisci una data odierna o futura.',
+            };
+        }
+
+        // Controllo: date che superano l'anno corrente
+        const currentYear = today.getFullYear();
+        const inputYear = parsedDate.getFullYear();
+        if (inputYear > currentYear && !(today.getMonth() === 11)) {
+            return {
+                isValid: false,
+                message: 'Non puoi scegliere una data che va oltre l\'anno corrente. Questo non vale per il mese di dicembre',
+            };
+        }
+
+        // Controllo: mesi di luglio e agosto
+        const inputMonth = parsedDate.getMonth(); // Indici da 0 a 11
+        if (inputMonth === 6 || inputMonth === 7) {
+            return {
+                isValid: false,
+                message: 'Lo studio è chiuso a luglio e agosto. Inserisci una data compresa tra settembre e giugno.',
+            };
+        }
+
+        // Se tutti i controlli sono superati, la data è valida
+        return {
+            isValid: true,
+            date: format(parsedDate, 'yyyy-MM-dd'), // Restituisce la data in formato 'yyyy-MM-dd'
+        };
     }
-    return null;
+
+    // Se nessun formato è valido
+    return {
+        isValid: false,
+        message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY o anche GG mese/Mese YYYY .',
+    };
 }
+
 
 function getAvailableDisciplines(schedule) {
     const disciplines = Object.values(schedule).flatMap(day =>
@@ -487,16 +527,20 @@ client.on('message', async (message) => {
         
 
         case 'ask_date': {
-            const formattedDate = validateAndFormatDate(userResponse);
-            if (formattedDate) {
-                userState.data.date = formattedDate;
-                userState.step = 'ask_name';
-                await message.reply(`La data scelta è ${formattedDate}. Procediamo! Inserisci il tuo nome:`);
+            const validationResult = validateAndFormatDate(userResponse);
+        
+            if (!validationResult.isValid) {
+                // Messaggio di errore specifico
+                await message.reply(validationResult.message);
             } else {
-                await message.reply('Data non valida. Inserisci una data valida (formato: GG/MM/YYYY).');
+                // La data è valida
+                userState.data.date = validationResult.date;
+                userState.step = 'ask_name';
+                await message.reply(`La data scelta è ${validationResult.date}. Procediamo! Inserisci il tuo nome:`);
             }
             break;
         }
+        
 
         case 'ask_name': {
             if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il nome contenga solo lettere
