@@ -325,72 +325,24 @@ async function sendEmailNotification(data) {
 
 
 // Configurazione WhatsApp Client
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
-const fs = require('fs');
-const path = require('path');
+const client = new Client({ authStrategy: new LocalAuth() });
 
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { headless: true }, // Modifica qui per il debugging se necessario
-});
-
-let qrPath = path.join(__dirname, 'qr.png');
-
-// Event: QR Code generation
-client.on('qr', async (qr) => {
+client.on('qr', (qr) => {
     console.log('QR Code generato.');
-
-    // Salva il QR code in un file
-    try {
-        await qrcode.toFile(qrPath, qr);
-        console.log('QR Code salvato con successo.');
-    } catch (err) {
-        console.error('Errore nel salvataggio del QR Code:', err.message);
-    }
-
-    // Rigenera QR dopo 60 secondi se non scansionato
-    setTimeout(() => {
-        if (!client.info || !client.info.wid) {
-            console.log('QR Code scaduto. Rigenerando...');
-            client.initialize(); // Reinizializza il client per ottenere un nuovo QR
-        }
-    }, 60000); // Timeout di 60 secondi
-});
-
-// Event: Ready
-client.on('ready', () => {
-    console.log('Bot connesso a WhatsApp!');
-    // Elimina il file QR Code per sicurezza
-    if (fs.existsSync(qrPath)) {
-        fs.unlinkSync(qrPath);
-    }
-});
-
-// Event: Authenticated
-client.on('authenticated', () => {
-    console.log('Autenticazione completata.');
-    // Elimina il file QR Code per evitare confusione
-    if (fs.existsSync(qrPath)) {
-        fs.unlinkSync(qrPath);
-    }
-});
-
-// Event: Disconnected
-client.on('disconnected', (reason) => {
-    console.log(`Bot disconnesso: ${reason}`);
-    console.log('Tentativo di riconnessione in corso...');
-    client.initialize(); // Reinizializza il client in caso di disconnessione
+    const qrPath = path.join(__dirname, 'qr.png');
+    qrcode.toFile(qrPath, qr, (err) => {
+        if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
+    });
 });
 
 app.get('/qr', (req, res) => {
+    const qrPath = path.join(__dirname, 'qr.png');
     if (fs.existsSync(qrPath)) {
         res.sendFile(qrPath);
     } else {
         res.status(404).send('QR Code non trovato.');
     }
 });
-
 app.get('/ping', (req, res) => {
     console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
     res.status(200).send('OK');
