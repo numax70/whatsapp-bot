@@ -521,16 +521,26 @@ client.on('message', async (message) => {
         }
 
         case 'ask_phone': {
-            // Controlla che sia un numero di telefono valido (10-15 cifre)
+            // Validazione del numero di telefono
             const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
             
             if (!isValidPhoneNumber) {
+                // Se il numero non è valido, chiedi di nuovo
                 await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).');
                 break; // Resta nello stato 'ask_phone'
             }
         
             // Salva il numero di telefono
             userState.data.phone = userResponse.trim();
+        
+            // Verifica che tutti i dettagli della prenotazione siano presenti
+            if (!userState.data.date || !userState.data.time || !userState.data.lessonType) {
+                // Questo è un errore di stato: alcuni dati mancanti
+                console.error('Errore: Dettagli incompleti per la prenotazione:', userState.data);
+                await message.reply('Si è verificato un errore interno. Riprova a iniziare la prenotazione.');
+                delete userStates[chatId]; // Reset dello stato dell'utente
+                break;
+            }
         
             try {
                 // Aggiorna lo slot nel database
@@ -540,9 +550,9 @@ client.on('message', async (message) => {
                 );
         
                 if (!result.success) {
-                    // Se l'aggiornamento dello slot fallisce, informa l'utente e torna alla selezione dell'orario
+                    // Se non ci sono più posti disponibili
                     await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
-                    userState.step = 'ask_time'; // Torna alla selezione dell'orario
+                    userState.step = 'ask_day_time'; // Torna alla selezione del giorno e dell'orario
                     break;
                 }
         
@@ -561,7 +571,7 @@ client.on('message', async (message) => {
             delete userStates[chatId];
             break;
         }
-        
+       
         
 
         default:
