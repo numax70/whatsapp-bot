@@ -397,24 +397,71 @@ async function sendEmailNotification(data) {
 
 
 // Configurazione WhatsApp Client
-const client = new Client({ authStrategy: new LocalAuth() });
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true, // Puoi impostarlo a false per debug visivo
+        args: ['--no-sandbox', '--disable-setuid-sandbox'], // Per stabilità
+    },
+});
+// Percorso per salvare il QR Code
+const qrPath = path.join(__dirname, 'qr.png');
 
-client.on('qr', (qr) => {
-    console.log('QR Code generato.');
-    const qrPath = path.join(__dirname, 'qr.png');
-    qrcode.toFile(qrPath, qr, (err) => {
-        if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
-    });
+// Evento: QR Code generato
+client.on('qr', async (qr) => {
+    console.log('QR Code generato. Scansiona il codice per continuare.');
+
+    // Salva il QR Code come immagine
+    try {
+        await qrcode.toFile(qrPath, qr);
+        console.log('QR Code salvato con successo.');
+    } catch (err) {
+        console.error('Errore nel salvataggio del QR Code:', err.message);
+    }
+
+    // Timeout per rigenerare il QR code se non scansionato entro 60 secondi
+    setTimeout(() => {
+        if (!client.info || !client.info.wid) {
+            console.log('QR Code scaduto. Rigenerando...');
+            client.initialize(); // Reinizializza il client per generare un nuovo QR
+        }
+    }, 60000); // Timeout di 60 secondi
 });
 
-app.get('/qr', (req, res) => {
-    const qrPath = path.join(__dirname, 'qr.png');
+// Evento: Pronto
+client.on('ready', () => {
+    console.log('Bot connesso a WhatsApp!');
+
+    // Rimuove il QR Code dal file system dopo la connessione
     if (fs.existsSync(qrPath)) {
-        res.sendFile(qrPath);
-    } else {
-        res.status(404).send('QR Code non trovato.');
+        fs.unlinkSync(qrPath);
+        console.log('QR Code eliminato per sicurezza.');
     }
 });
+
+// Evento: Autenticazione completata
+client.on('authenticated', () => {
+    console.log('Autenticazione completata.');
+    if (fs.existsSync(qrPath)) {
+        fs.unlinkSync(qrPath); // Elimina il QR Code una volta autenticato
+    }
+});
+
+// Evento: Disconnessione
+client.on('disconnected', (reason) => {
+    console.error(`Bot disconnesso: ${reason}`);
+    console.log('Tentativo di riconnessione in corso...');
+    client.initialize(); // Reinizializza il client in caso di disconnessione
+});
+// Endpoint per recuperare il QR Code
+app.get('/qr', (req, res) => {
+    if (fs.existsSync(qrPath)) {
+        res.sendFile(qrPath); // Serve il file QR Code se esiste
+    } else {
+        res.status(404).send('QR Code non trovato. Attendi la generazione del QR.');
+    }
+});
+
 app.get('/ping', (req, res) => {
     console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
     res.status(200).send('OK');
@@ -604,56 +651,46 @@ client.on('message', async (message) => {
         }
 
         case 'ask_phone': {
-            // Validazione del numero di telefono
             const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
             
             if (!isValidPhoneNumber) {
-                // Se il numero non è valido, chiedi di nuovo
                 await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).');
                 break; // Resta nello stato 'ask_phone'
             }
         
-            // Salva il numero di telefono
-            userState.data.phone = userResponse.trim();
+            userState.data.phone = userResponse.trim(); // Salva il numero di telefono
         
-            // Verifica che tutti i dettagli della prenotazione siano presenti
-            if (!userState.data.date || !userState.data.time || !userState.data.lessonType) {
-                // Questo è un errore di stato: alcuni dati mancanti
-                console.error('Errore: Dettagli incompleti per la prenotazione:', userState.data);
-                await message.reply('Si è verificato un errore interno. Riprova a iniziare la prenotazione.');
-                delete userStates[chatId]; // Reset dello stato dell'utente
+            // Controllo finale dello slot
+            const slotCheck = await getAvailableSlots(userState.data.date);
+            const selectedSlot = slotCheck.find(
+                (slot) => slot.time === userState.data.time && slot.lessonType === userState.data.lessonType
+            );
+        
+            if (!selectedSlot || selectedSlot.remainingSeats <= 0) {
+                await message.reply('Purtroppo questo slot è appena stato prenotato. Torna a scegliere un altro orario.');
+                userState.step = 'ask_time'; // Torna alla selezione dell'orario
                 break;
             }
         
-            try {
-                // Aggiorna lo slot nel database
-                const result = await updateAvailableSlots(
-                    userState.data.date,
-                    userState.data.time
-                );
+            // Aggiorna lo slot nel database
+            const result = await updateAvailableSlots(userState.data.date, userState.data.time);
         
-                if (!result.success) {
-                    // Se non ci sono più posti disponibili
-                    await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
-                    userState.step = 'ask_day_time'; // Torna alla selezione del giorno e dell'orario
-                    break;
-                }
-        
-                // Invia riepilogo e completa la prenotazione
-                await sendWhatsAppNotification(client, chatId, userState.data);
-                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                await sendEmailNotification(userState.data);
-        
-                await message.reply('Prenotazione completata con successo! ✅');
-            } catch (error) {
-                console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
-                await message.reply('Si è verificato un errore durante la prenotazione. Riprova più tardi.');
+            if (!result.success) {
+                await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
+                userState.step = 'ask_time'; // Torna alla selezione dell'orario
+                break;
             }
         
-            // Reset dello stato dell'utente
-            delete userStates[chatId];
+            // Continua con la prenotazione
+            await sendWhatsAppNotification(client, chatId, userState.data);
+            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+            await sendEmailNotification(userState.data);
+        
+            await message.reply('Prenotazione completata con successo! ✅');
+            delete userStates[chatId]; // Reset dello stato dell'utente
             break;
         }
+        
        
         
 
@@ -667,32 +704,32 @@ client.on('message', async (message) => {
 
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
 async function updateAvailableSlots(date, time) {
+    const ref = db.ref(`calendario/${date}`);
     try {
-        const ref = db.ref(`calendario/${date}`);
-        const snapshot = await ref.once('value');
-        const slots = snapshot.val();
-
-        if (!slots) {
-            return { success: false, message: 'Non ci sono slot disponibili per questa data.' };
-        }
-
-        const updatedSlots = slots.map((slot) => {
-            if (slot.time === time) {
-                if (!slot.remainingSeats || slot.remainingSeats <= 0) {
-                    return { ...slot, remainingSeats: 0 }; // Prevenzione contro valori negativi
+        const transactionResult = await ref.transaction((slots) => {
+            if (!slots) return slots; // Se non ci sono slot, esci
+            return slots.map((slot) => {
+                if (slot.time === time) {
+                    if (!slot.remainingSeats || slot.remainingSeats <= 0) {
+                        throw new Error('Non ci sono più posti disponibili per questo orario.');
+                    }
+                    return { ...slot, remainingSeats: slot.remainingSeats - 1 };
                 }
-                return { ...slot, remainingSeats: slot.remainingSeats - 1 };
-            }
-            return slot;
+                return slot;
+            });
         });
 
-        await ref.set(updatedSlots); // Aggiorna il database
+        if (!transactionResult.committed) {
+            throw new Error('Impossibile completare la transazione. Riprova più tardi.');
+        }
         return { success: true };
     } catch (error) {
         console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
         return { success: false, message: error.message };
     }
 }
+
+
 
 
 
