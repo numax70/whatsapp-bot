@@ -18,6 +18,7 @@
     "googleapis": "^144.0.0",
     "ngrok": "^5.0.0-beta.2",
     "nodemailer": "^6.9.16",
+    "puppeteer": "^24.1.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.26.0"

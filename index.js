@@ -7,6 +7,82 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
+const userStates = {};
+const userTimeouts = {};
+const STATE_TIMEOUT = 300000; // 5 minuti (300.000 millisecondi)
+
+function getUserState(chatId) {
+    return userStates[chatId] || null;
+}
+
+function setUserState(chatId, state) {
+    userStates[chatId] = { ...state, lastUpdated: Date.now() };
+
+    if (userTimeouts[chatId]) {
+        clearTimeout(userTimeouts[chatId]);
+    }
+
+    userTimeouts[chatId] = setTimeout(() => {
+        clearUserState(chatId);
+    }, STATE_TIMEOUT);
+}
+
+function clearUserState(chatId) {
+    delete userStates[chatId];
+    if (userTimeouts[chatId]) {
+        clearTimeout(userTimeouts[chatId]);
+        delete userTimeouts[chatId];
+    }
+    console.log(`Stato utente ${chatId} eliminato.`);
+}
+
+
+setInterval(() => {
+    const now = Date.now();
+    for (const chatId in userStates) {
+        if (userStates[chatId]?.lastUpdated < now - STATE_TIMEOUT) {
+            clearUserState(chatId);
+        }
+    }
+}, STATE_TIMEOUT);
+
+
+client.on('message', async (message) => {
+    const chatId = message.from;
+
+    // Comando per ripristinare lo stato dell'utente
+    if (message.body.toLowerCase() === 'reset') {
+        clearUserState(chatId);
+        await message.reply('Il tuo stato è stato reimpostato. Puoi ricominciare.');
+        return;
+    }
+
+    // Recupera lo stato corrente o imposta uno nuovo
+    let userState = getUserState(chatId);
+
+    if (!userState) {
+        setUserState(chatId, { step: 'ask_discipline' });
+        const disciplines = getAvailableDisciplines(schedule);
+        await message.reply(`Vuoi prenotare una lezione?\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
+        return;
+    }
+
+    // Aggiorna il timestamp dell'utente
+    setUserState(chatId, { ...userState });
+
+    // Flusso dei messaggi (modificato per usare getUserState e setUserState)
+    switch (userState.step) {
+        case 'ask_discipline':
+            // Logica per gestire la scelta della disciplina
+            break;
+        case 'ask_day_time':
+            // Logica per gestire giorno e orario
+            break;
+        // Altri case...
+    }
+});
+
+
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -95,86 +171,41 @@ const transporter = nodemailer.createTransport({
 // Funzione per validare e convertire la data
 function validateAndFormatDate(input, schedule, discipline, time) {
     const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
-    const today = new Date(); // Data odierna
-    today.setHours(0, 0, 0, 0); // Azzerare ore, minuti e secondi per confronti solo sulla data
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     for (const fmt of formats) {
         const parsedDate = parse(input, fmt, today, { locale: it });
 
-        if (!isValid(parsedDate)) {
-            continue; // Passa al prossimo formato se la data non è valida
-        }
+        if (!isValid(parsedDate)) continue;
 
-        // Controllo: la data deve essere odierna o futura
         if (parsedDate < today) {
-            return {
-                isValid: false,
-                message: 'Non è possibile inserire una data passata. Inserisci una data odierna o futura.',
-            };
+            return { isValid: false, message: 'Non è possibile inserire una data passata.' };
         }
 
-        // Controllo: mesi di luglio e agosto
-        const inputMonth = parsedDate.getMonth(); // Indici da 0 (gennaio) a 11 (dicembre)
-        if (inputMonth === 6 || inputMonth === 7) {
-            return {
-                isValid: false,
-                message: 'Lo studio è chiuso a luglio e agosto. Inserisci una data compresa tra settembre e giugno.',
-            };
+        const month = parsedDate.getMonth();
+        if (month === 6 || month === 7) {
+            return { isValid: false, message: 'Le prenotazioni sono chiuse a luglio e agosto.' };
         }
 
-        // Controllo: date che superano l'anno corrente
+        const year = parsedDate.getFullYear();
         const currentYear = today.getFullYear();
-        const inputYear = parsedDate.getFullYear();
-        const isDecember = today.getMonth() === 11; // Verifica se siamo a dicembre
-
-        if (inputYear > currentYear && !isDecember) {
-            return {
-                isValid: false,
-                message: 'Non è possibile inserire date che superano l\'anno corrente, a meno che non siamo a dicembre.',
-            };
+        if (year > currentYear + 1 || (year > currentYear && today.getMonth() !== 11)) {
+            return { isValid: false, message: 'Non puoi prenotare per l\'anno successivo se non siamo a dicembre.' };
         }
 
-        if (inputYear > currentYear + 1 || (inputYear > currentYear && !isDecember)) {
-            return {
-                isValid: false,
-                message: 'Puoi prenotare date solo nell\'anno corrente o nel prossimo anno se siamo a dicembre.',
-            };
+        const dayOfWeek = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+        const slots = schedule[dayOfWeek];
+        if (!slots || !slots.some(slot => slot.lessonType === discipline && slot.time === time)) {
+            return { isValid: false, message: 'Nessuna lezione disponibile per questa data e orario.' };
         }
 
-        // Controllo che la data corrisponda a un giorno del calendario con lezioni valide
-        const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-        const daySlots = schedule[inputDay];
-        if (!daySlots) {
-            return {
-                isValid: false,
-                message: `Non ci sono lezioni disponibili il ${inputDay}. Inserisci una data che corrisponda al calendario delle lezioni.`,
-            };
-        }
-
-        // Verifica che la combinazione giorno, orario e disciplina sia valida
-        const isValidSlot = daySlots.some(slot => 
-            slot.lessonType === discipline && slot.time === time
-        );
-        if (!isValidSlot) {
-            return {
-                isValid: false,
-                message: `Non ci sono lezioni di ${discipline} il ${inputDay} alle ${time}. Riprova con una data conforme al calendario.`,
-            };
-        }
-
-        // La data è valida
-        return {
-            isValid: true,
-            date: format(parsedDate, 'yyyy-MM-dd'), // Restituisce la data in formato 'yyyy-MM-dd'
-        };
+        return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
     }
 
-    // Se nessun formato è valido
-    return {
-        isValid: false,
-        message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY.',
-    };
+    return { isValid: false, message: 'Formato data non valido. Usa GG/MM/YYYY.' };
 }
+
 
 
 
@@ -404,6 +435,17 @@ const client = new Client({
         args: ['--no-sandbox', '--disable-setuid-sandbox'], // Per stabilità
     },
 });
+async function startClient() {
+    console.log('Inizializzando il client WhatsApp...');
+    try {
+        await client.initialize();
+    } catch (error) {
+        console.error('Errore durante l\'inizializzazione del client:', error.message);
+        console.log('Ritento l\'inizializzazione...');
+        setTimeout(startClient, 5000); // Ritenta dopo 5 secondi
+    }
+}
+
 // Percorso per salvare il QR Code
 const qrPath = path.join(__dirname, 'qr.png');
 
@@ -423,7 +465,7 @@ client.on('qr', async (qr) => {
     setTimeout(() => {
         if (!client.info || !client.info.wid) {
             console.log('QR Code scaduto. Rigenerando...');
-            client.initialize(); // Reinizializza il client per generare un nuovo QR
+            startClient(); // Reinizializza il client per generare un nuovo QR
         }
     }, 60000); // Timeout di 60 secondi
 });
@@ -434,8 +476,13 @@ client.on('ready', () => {
 
     // Rimuove il QR Code dal file system dopo la connessione
     if (fs.existsSync(qrPath)) {
-        fs.unlinkSync(qrPath);
-        console.log('QR Code eliminato per sicurezza.');
+        try{
+            fs.unlinkSync(qrPath);
+            console.log('QR Code eliminato per sicurezza.');  
+        }catch(error){
+            console.error('Errore durante l\'eliminazione del QR Code:', error.message);
+        }
+        
     }
 });
 
@@ -451,7 +498,7 @@ client.on('authenticated', () => {
 client.on('disconnected', (reason) => {
     console.error(`Bot disconnesso: ${reason}`);
     console.log('Tentativo di riconnessione in corso...');
-    client.initialize(); // Reinizializza il client in caso di disconnessione
+    startClient(); // Reinizializza il client in caso di disconnessione
 });
 // Endpoint per recuperare il QR Code
 app.get('/qr', (req, res) => {
@@ -513,7 +560,7 @@ client.on('message', async (message) => {
     if (disengagedUsers.has(chatId)) {
         if (userResponse === 'prenotazione') {
             disengagedUsers.delete(chatId);
-            userStates[chatId] = { step: 'ask_discipline' }; // Riparte con la richiesta della disciplina
+            setUserState(chatId, { step: 'ask_discipline', lastUpdated: Date.now() }); // Riparte con la richiesta della disciplina
             const disciplines = getAvailableDisciplines(schedule);
             await message.reply(`Ecco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
         } else {
@@ -523,12 +570,19 @@ client.on('message', async (message) => {
     }
 
     // Se l'utente non ha uno stato attivo, inizializza
-    if (!userStates[chatId]) {
-        userStates[chatId] = { step: 'ask_discipline' };
-        const disciplines = getAvailableDisciplines(schedule);
-        await message.reply(`Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
-        return;
-    }
+// Gestore dei timeout per gli stati utente
+const userTimeouts = {};
+
+if (!userStates[chatId]) {
+    setUserState(chatId, { step: 'ask_discipline' });
+    const disciplines = getAvailableDisciplines(schedule);
+    await message.reply(`Vuoi prenotare una lezione?\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
+    return;
+}
+
+// Aggiorna il timestamp dell'utente per indicare che è ancora attivo
+userStates[chatId].lastUpdated = Date.now();
+
 
     const userState = userStates[chatId];
 
@@ -720,8 +774,9 @@ async function updateAvailableSlots(date, time) {
         });
 
         if (!transactionResult.committed) {
-            throw new Error('Impossibile completare la transazione. Riprova più tardi.');
+            return { success: false, message: 'Un altro utente ha prenotato questo slot. Prova con un altro orario.' };
         }
+        
         return { success: true };
     } catch (error) {
         console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
@@ -752,4 +807,4 @@ app.listen(process.env.PORT || 10000, async () => {
     await populateCalendarWithValidation();
     await migrateRemainingSeats();
 });
-client.initialize();
+startClient();
