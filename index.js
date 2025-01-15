@@ -393,7 +393,7 @@ client.on('message', async (message) => {
             disengagedUsers.delete(chatId);
             userStates[chatId] = { step: 'ask_discipline' }; // Riparte con la richiesta della disciplina
             const disciplines = getAvailableDisciplines(schedule);
-            await message.reply(`Ecco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli il numero della disciplina.`);
+            await message.reply(`Ecco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
         } else {
             await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
         }
@@ -404,7 +404,7 @@ client.on('message', async (message) => {
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_discipline' };
         const disciplines = getAvailableDisciplines(schedule);
-        await message.reply(`Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli il numero della disciplina.`);
+        await message.reply(`Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
         return;
     }
 
@@ -451,7 +451,7 @@ client.on('message', async (message) => {
                     userState.data.lessonType = selectedSlot.lessonType; // Salva il tipo di lezione
         
                     userState.step = 'ask_date'; // Passa allo step successivo
-                    await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
+                    await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida, guarda il calendario (formato: GG/MM/YYYY):`);
                 } else {
                     // Caso in cui la combinazione di giorno e orario non è valida
                     const availableTimes = daySlots
@@ -520,7 +520,7 @@ client.on('message', async (message) => {
 
                     await message.reply('Prenotazione completata con successo! ✅');
                 } else {
-                    await message.reply(result.message);
+                    await message.reply(`Errore durante l'aggiornamento dello slot: ${result.message}`);
                 }
 
                 delete userStates[chatId]; // Reset dello stato dell'utente
@@ -541,6 +541,7 @@ client.on('message', async (message) => {
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
 async function updateAvailableSlots(date, time) {
     try {
+        // Recupera gli slot disponibili dal database
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val();
@@ -549,11 +550,17 @@ async function updateAvailableSlots(date, time) {
             return { success: false, message: 'Non ci sono slot disponibili per questa data.' };
         }
 
+        // Trova lo slot corrispondente all'orario richiesto
+        let slotFound = false;
         const updatedSlots = slots.map((slot) => {
             if (slot.time === time) {
+                slotFound = true;
+
+                // Verifica i posti disponibili
                 if (!slot.remainingSeats || slot.remainingSeats <= 0) {
-                    throw new Error('Non ci sono più posti disponibili per questo slot.');
+                    return { ...slot, remainingSeats: 0 }; // Mantiene il valore a 0
                 }
+
                 // Decrementa i posti disponibili
                 return {
                     ...slot,
@@ -563,10 +570,15 @@ async function updateAvailableSlots(date, time) {
             return slot;
         });
 
-        await ref.set(updatedSlots); // Aggiorna il database
+        if (!slotFound) {
+            return { success: false, message: 'Orario non trovato per questa data.' };
+        }
+
+        // Aggiorna i dati nel database
+        await ref.set(updatedSlots);
         return { success: true };
     } catch (error) {
-        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
+        console.error(`Errore durante l'aggiornamento degli slot per ${date} e ${time}:`, error.message);
         return { success: false, message: error.message };
     }
 }
