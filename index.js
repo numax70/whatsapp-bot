@@ -93,7 +93,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Funzione per validare e convertire la data
-function validateAndFormatDate(input, schedule, discipline, day, time) {
+function validateAndFormatDate(input, schedule, discipline, time) {
     const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
     const today = new Date(); // Data odierna
     today.setHours(0, 0, 0, 0); // Azzerare ore, minuti e secondi per confronti solo sulla data
@@ -110,6 +110,15 @@ function validateAndFormatDate(input, schedule, discipline, day, time) {
             return {
                 isValid: false,
                 message: 'Non è possibile inserire una data passata. Inserisci una data odierna o futura.',
+            };
+        }
+
+        // Controllo: mesi di luglio e agosto
+        const inputMonth = parsedDate.getMonth(); // Indici da 0 (gennaio) a 11 (dicembre)
+        if (inputMonth === 6 || inputMonth === 7) {
+            return {
+                isValid: false,
+                message: 'Lo studio è chiuso a luglio e agosto. Inserisci una data compresa tra settembre e giugno.',
             };
         }
 
@@ -132,27 +141,18 @@ function validateAndFormatDate(input, schedule, discipline, day, time) {
             };
         }
 
-        // Controllo: mesi di luglio e agosto
-        const inputMonth = parsedDate.getMonth(); // Indici da 0 a 11
-        if (inputMonth === 6 || inputMonth === 7) {
-            return {
-                isValid: false,
-                message: 'Lo studio è chiuso a luglio e agosto. Inserisci una data compresa tra settembre e giugno.',
-            };
-        }
-
-        // Controllo: conformità al calendario
+        // Controllo che la data corrisponda a un giorno del calendario con lezioni valide
         const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-        const validDaySlots = schedule[inputDay];
-        if (!validDaySlots) {
+        const daySlots = schedule[inputDay];
+        if (!daySlots) {
             return {
                 isValid: false,
-                message: `Non ci sono lezioni disponibili il ${inputDay}. Inserisci un giorno valido in base al calendario.`,
+                message: `Non ci sono lezioni disponibili il ${inputDay}. Inserisci una data che corrisponda al calendario delle lezioni.`,
             };
         }
 
         // Verifica che la combinazione giorno, orario e disciplina sia valida
-        const isValidSlot = validDaySlots.some(slot => 
+        const isValidSlot = daySlots.some(slot => 
             slot.lessonType === discipline && slot.time === time
         );
         if (!isValidSlot) {
@@ -175,6 +175,7 @@ function validateAndFormatDate(input, schedule, discipline, day, time) {
         message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY.',
     };
 }
+
 
 
 
@@ -562,12 +563,11 @@ client.on('message', async (message) => {
                 userResponse,
                 schedule, // Passa il calendario
                 userState.data.discipline, // Disciplina selezionata
-                userState.data.day, // Giorno selezionato
                 userState.data.time // Orario selezionato
             );
         
             if (!validationResult.isValid) {
-                // Messaggio di errore specifico
+                // Messaggio di errore specifico basato sulla validazione
                 await message.reply(validationResult.message);
             } else {
                 // La data è valida
@@ -577,6 +577,7 @@ client.on('message', async (message) => {
             }
             break;
         }
+        
         
                
 
