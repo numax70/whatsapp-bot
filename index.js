@@ -344,6 +344,10 @@ app.get('/qr', (req, res) => {
         res.status(404).send('QR Code non trovato.');
     }
 });
+app.get('/ping', (req, res) => {
+    console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
+    res.status(200).send('OK');
+});
 
 // Funzione per prospetto settimanale
 function displaySchedule() {
@@ -440,25 +444,25 @@ client.on('message', async (message) => {
 
         case 'ask_day_time': {
             const [day, time] = userResponse.split(' ').map(s => s.trim().toLowerCase());
-        
+
             // Controlla se il giorno esiste nello schedule
             const daySlots = schedule[day];
             if (!daySlots) {
                 await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
                 break;
             }
-        
+
             // Filtra gli orari disponibili per la disciplina scelta
             const availableTimes = daySlots
                 .filter(slot => slot.lessonType === userState.data.discipline)
                 .map(slot => slot.time);
-        
+
             if (availableTimes.length === 0) {
                 // Nessun orario disponibile per la disciplina scelta nel giorno selezionato
                 await message.reply(`Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`);
                 break;
             }
-        
+
             // Verifica se l'orario è valido
             if (availableTimes.includes(time)) {
                 // Orario valido
@@ -473,8 +477,6 @@ client.on('message', async (message) => {
             }
             break;
         }
-        
-        
 
         case 'ask_date': {
             const formattedDate = validateAndFormatDate(userResponse);
@@ -489,30 +491,30 @@ client.on('message', async (message) => {
         }
 
         case 'ask_name': {
-            if (userResponse.trim().length > 0) {
-                userState.data.name = userResponse.trim();
-                userState.step = 'ask_surname';
+            if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il nome contenga solo lettere
+                userState.data.name = userResponse.trim(); // Salva il nome
+                userState.step = 'ask_surname'; // Passa alla richiesta del cognome
                 await message.reply('Perfetto! Ora inserisci il tuo cognome:');
             } else {
-                await message.reply('Per favore, inserisci un nome valido.');
+                await message.reply('Per favore, inserisci un nome valido composto solo da lettere.');
             }
             break;
         }
 
         case 'ask_surname': {
-            if (userResponse.trim().length > 0) {
-                userState.data.surname = userResponse.trim();
-                userState.step = 'ask_phone';
+            if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il cognome contenga solo lettere
+                userState.data.surname = userResponse.trim(); // Salva il cognome
+                userState.step = 'ask_phone'; // Passa alla richiesta del numero di telefono
                 await message.reply('Inserisci il tuo numero di telefono:');
             } else {
-                await message.reply('Per favore, inserisci un cognome valido.');
+                await message.reply('Per favore, inserisci un cognome valido composto solo da lettere.');
             }
             break;
         }
 
         case 'ask_phone': {
-            if (/^\d+$/.test(userResponse.trim())) {
-                userState.data.phone = userResponse.trim();
+            if (/^\d+$/.test(userResponse.trim())) { // Verifica che il numero sia composto solo da cifre
+                userState.data.phone = userResponse.trim(); // Salva il numero di telefono
 
                 // Aggiorna lo slot nel database
                 const result = await updateAvailableSlots(
@@ -520,20 +522,28 @@ client.on('message', async (message) => {
                     userState.data.time
                 );
 
-                if (result.success) {
-                    // Invia riepilogo
-                    await sendWhatsAppNotification(client, chatId, userState.data);
-                    await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                    await sendEmailNotification(userState.data);
-
-                    await message.reply('Prenotazione completata con successo! ✅');
-                } else {
-                    await message.reply(`Errore durante l'aggiornamento dello slot: ${result.message}`);
+                // Controlla se l'aggiornamento ha avuto successo
+                if (!result.success) {
+                    // Se non ci sono più posti disponibili, informa l'utente
+                    await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
+                    userState.step = 'ask_time'; // Torna alla selezione dell'orario
+                    const daySlots = schedule[userState.data.day.toLowerCase()];
+                    const availableTimes = daySlots
+                        .filter(slot => slot.lessonType === userState.data.discipline)
+                        .map(slot => slot.time)
+                        .join(', ');
+                    await message.reply(`Gli orari disponibili per ${userState.data.discipline} sono: ${availableTimes}.`);
+                    break;
                 }
+                // Invia riepilogo
+                await sendWhatsAppNotification(client, chatId, userState.data);
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                await sendEmailNotification(userState.data);
 
+                await message.reply('Prenotazione completata con successo! ✅');
                 delete userStates[chatId]; // Reset dello stato dell'utente
             } else {
-                await message.reply('Per favore, inserisci un numero di telefono valido.');
+                await message.reply('Per favore, inserisci un numero di telefono valido composto solo da cifre.');
             }
             break;
         }
@@ -549,7 +559,6 @@ client.on('message', async (message) => {
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
 async function updateAvailableSlots(date, time) {
     try {
-        // Recupera gli slot disponibili dal database
         const ref = db.ref(`calendario/${date}`);
         const snapshot = await ref.once('value');
         const slots = snapshot.val();
@@ -558,38 +567,24 @@ async function updateAvailableSlots(date, time) {
             return { success: false, message: 'Non ci sono slot disponibili per questa data.' };
         }
 
-        // Trova lo slot corrispondente all'orario richiesto
-        let slotFound = false;
         const updatedSlots = slots.map((slot) => {
             if (slot.time === time) {
-                slotFound = true;
-
-                // Verifica i posti disponibili
                 if (!slot.remainingSeats || slot.remainingSeats <= 0) {
-                    return { ...slot, remainingSeats: 0 }; // Mantiene il valore a 0
+                    return { ...slot, remainingSeats: 0 }; // Prevenzione contro valori negativi
                 }
-
-                // Decrementa i posti disponibili
-                return {
-                    ...slot,
-                    remainingSeats: slot.remainingSeats - 1,
-                };
+                return { ...slot, remainingSeats: slot.remainingSeats - 1 };
             }
             return slot;
         });
 
-        if (!slotFound) {
-            return { success: false, message: 'Orario non trovato per questa data.' };
-        }
-
-        // Aggiorna i dati nel database
-        await ref.set(updatedSlots);
+        await ref.set(updatedSlots); // Aggiorna il database
         return { success: true };
     } catch (error) {
-        console.error(`Errore durante l'aggiornamento degli slot per ${date} e ${time}:`, error.message);
+        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
         return { success: false, message: error.message };
     }
 }
+
 
 
 // Ping per evitare sospensione
