@@ -93,7 +93,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Funzione per validare e convertire la data
-function validateAndFormatDate(input) {
+function validateAndFormatDate(input, schedule, discipline, day, time) {
     const formats = ['dd/MM/yyyy', 'dd MMMM yyyy'];
     const today = new Date(); // Data odierna
     today.setHours(0, 0, 0, 0); // Azzerare ore, minuti e secondi per confronti solo sulla data
@@ -119,7 +119,7 @@ function validateAndFormatDate(input) {
         if (inputYear > currentYear && !(today.getMonth() === 11)) {
             return {
                 isValid: false,
-                message: 'Non puoi scegliere una data che va oltre l\'anno corrente. Questo non vale per il mese di dicembre',
+                message: 'Non è possibile inserire date che superano l\'anno corrente, a meno che non siamo a dicembre.',
             };
         }
 
@@ -132,7 +132,28 @@ function validateAndFormatDate(input) {
             };
         }
 
-        // Se tutti i controlli sono superati, la data è valida
+        // Controllo: conformità al calendario
+        const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+        const validDaySlots = schedule[inputDay];
+        if (!validDaySlots) {
+            return {
+                isValid: false,
+                message: `Non ci sono lezioni disponibili il ${inputDay}. Inserisci un giorno valido in base al calendario.`,
+            };
+        }
+
+        // Verifica che la combinazione giorno, orario e disciplina sia valida
+        const isValidSlot = validDaySlots.some(slot => 
+            slot.lessonType === discipline && slot.time === time
+        );
+        if (!isValidSlot) {
+            return {
+                isValid: false,
+                message: `Non ci sono lezioni di ${discipline} il ${inputDay} alle ${time}. Riprova con una data conforme al calendario.`,
+            };
+        }
+
+        // La data è valida
         return {
             isValid: true,
             date: format(parsedDate, 'yyyy-MM-dd'), // Restituisce la data in formato 'yyyy-MM-dd'
@@ -142,7 +163,7 @@ function validateAndFormatDate(input) {
     // Se nessun formato è valido
     return {
         isValid: false,
-        message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY o anche GG mese/Mese YYYY .',
+        message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY.',
     };
 }
 
@@ -527,7 +548,13 @@ client.on('message', async (message) => {
         
 
         case 'ask_date': {
-            const validationResult = validateAndFormatDate(userResponse);
+            const validationResult = validateAndFormatDate(
+                userResponse,
+                schedule, // Passa il calendario
+                userState.data.discipline, // Disciplina selezionata
+                userState.data.day, // Giorno selezionato
+                userState.data.time // Orario selezionato
+            );
         
             if (!validationResult.isValid) {
                 // Messaggio di errore specifico
@@ -540,6 +567,7 @@ client.on('message', async (message) => {
             }
             break;
         }
+        
         
 
         case 'ask_name': {
