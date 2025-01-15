@@ -143,41 +143,40 @@ function findNextAvailableDate(schedule, inputDate, discipline, time) {
 
 // Funzione per inviare il riepilogo al cliente
 async function sendWhatsAppNotification(client, phone, bookingData) {
-    if (!bookingData.name) {
-        throw new Error('Nome non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    // Validazione dei dati obbligatori
+    const missingFields = [];
+    if (!bookingData.name) missingFields.push('Nome');
+    if (!bookingData.surname) missingFields.push('Cognome');
+    if (!bookingData.phone) missingFields.push('Numero di telefono');
+    if (!bookingData.date) missingFields.push('Data');
+    if (!bookingData.time) missingFields.push('Orario');
+    if (!bookingData.lessonType) missingFields.push('Tipo di lezione');
+
+    if (missingFields.length > 0) {
+        throw new Error(`I seguenti campi sono mancanti: ${missingFields.join(', ')}. Impossibile inviare il riepilogo della prenotazione.`);
     }
-    if (!bookingData.surname) {
-        throw new Error('Cognome non specificato. Impossibile inviare il riepilogo della prenotazione.');
-    }
-    if (!bookingData.phone) {
-        throw new Error('Numero di telefono non specificato. Impossibile inviare il riepilogo della prenotazione.');
-    }
-    if (!bookingData.date) {
-        throw new Error('Data non specificata. Impossibile inviare il riepilogo della prenotazione.');
-    }
-    if (!bookingData.time) {
-        throw new Error('Orario non specificato. Impossibile inviare il riepilogo della prenotazione.');
-    }
-    if (!bookingData.lessonType) {
-        throw new Error('Tipo di lezione non specificato. Impossibile inviare il riepilogo della prenotazione.');
-    }
+
+    // Composizione del messaggio
     const message = `
 📋 *Riepilogo Prenotazione*
-👤 Nome: ${bookingData.name || 'N/A'}
-👥 Cognome: ${bookingData.surname || 'N/A'}
-📞 Telefono: ${bookingData.phone || 'N/A'}
-📅 Data: ${bookingData.date || 'N/A'}
-⏰ Ora: ${bookingData.time || 'N/A'}
-📘 Lezione: ${bookingData.lessonType || 'N/A'}
+👤 Nome: ${bookingData.name}
+👥 Cognome: ${bookingData.surname}
+📞 Telefono: ${bookingData.phone}
+📅 Data: ${bookingData.date}
+⏰ Ora: ${bookingData.time}
+📘 Lezione: ${bookingData.lessonType}
     `;
 
     try {
+        // Invio del messaggio tramite WhatsApp
         await client.sendMessage(phone, message);
-        console.log(`Riepilogo prenotazione inviato a ${phone}.`);
+        console.log(`Riepilogo prenotazione inviato con successo a ${phone}.`);
     } catch (error) {
-        console.error(`Errore nell'invio del riepilogo a ${phone}:`, error.message);
+        console.error(`Errore nell'invio del riepilogo a ${phone}: ${error.message}`);
+        throw new Error(`Errore durante l'invio del messaggio WhatsApp a ${phone}: ${error.message}`);
     }
 }
+
 
 
 async function clearCalendar() {
@@ -443,31 +442,39 @@ client.on('message', async (message) => {
         }
 
         case 'ask_day_time': {
-            const [day, time] = userResponse.split(' ').map(s => s.trim().toLowerCase());
-
+            const userInput = userResponse.split(' ').map(s => s.trim().toLowerCase());
+            if (userInput.length < 2) {
+                await message.reply('Per favore, inserisci sia il giorno che l\'orario nel formato: "giorno orario" (ad esempio: "lunedì 09:30").');
+                break;
+            }
+        
+            const [day, time] = userInput;
+        
             // Controlla se il giorno esiste nello schedule
             const daySlots = schedule[day];
             if (!daySlots) {
                 await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
                 break;
             }
-
+        
             // Filtra gli orari disponibili per la disciplina scelta
             const availableTimes = daySlots
                 .filter(slot => slot.lessonType === userState.data.discipline)
                 .map(slot => slot.time);
-
+        
             if (availableTimes.length === 0) {
                 // Nessun orario disponibile per la disciplina scelta nel giorno selezionato
                 await message.reply(`Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`);
                 break;
             }
-
+        
             // Verifica se l'orario è valido
             if (availableTimes.includes(time)) {
                 // Orario valido
+                const selectedSlot = daySlots.find(slot => slot.lessonType === userState.data.discipline && slot.time === time);
                 userState.data.day = day;
                 userState.data.time = time;
+                userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
                 userState.step = 'ask_date';
                 await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
             } else {
@@ -477,6 +484,7 @@ client.on('message', async (message) => {
             }
             break;
         }
+        
 
         case 'ask_date': {
             const formattedDate = validateAndFormatDate(userResponse);
@@ -513,37 +521,47 @@ client.on('message', async (message) => {
         }
 
         case 'ask_phone': {
-            const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim()); // Controlla che sia un numero di telefono valido (10-15 cifre)
+            // Controlla che sia un numero di telefono valido (10-15 cifre)
+            const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
             
             if (!isValidPhoneNumber) {
-                await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890).');
+                await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).');
                 break; // Resta nello stato 'ask_phone'
             }
         
             // Salva il numero di telefono
             userState.data.phone = userResponse.trim();
         
-            // Aggiorna lo slot nel database
-            const result = await updateAvailableSlots(
-                userState.data.date,
-                userState.data.time
-            );
+            try {
+                // Aggiorna lo slot nel database
+                const result = await updateAvailableSlots(
+                    userState.data.date,
+                    userState.data.time
+                );
         
-            if (!result.success) {
-                await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
-                userState.step = 'ask_time'; // Torna alla selezione dell'orario
-                break;
+                if (!result.success) {
+                    // Se l'aggiornamento dello slot fallisce, informa l'utente e torna alla selezione dell'orario
+                    await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
+                    userState.step = 'ask_time'; // Torna alla selezione dell'orario
+                    break;
+                }
+        
+                // Invia riepilogo e completa la prenotazione
+                await sendWhatsAppNotification(client, chatId, userState.data);
+                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                await sendEmailNotification(userState.data);
+        
+                await message.reply('Prenotazione completata con successo! ✅');
+            } catch (error) {
+                console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
+                await message.reply('Si è verificato un errore durante la prenotazione. Riprova più tardi.');
             }
         
-            // Invia riepilogo e completa la prenotazione
-            await sendWhatsAppNotification(client, chatId, userState.data);
-            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-            await sendEmailNotification(userState.data);
-        
-            await message.reply('Prenotazione completata con successo! ✅');
-            delete userStates[chatId]; // Reset dello stato dell'utente
+            // Reset dello stato dell'utente
+            delete userStates[chatId];
             break;
         }
+        
         
 
         default:
