@@ -447,9 +447,18 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        args: ['--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--disable-background-timer-throttling',
+            '--disable-renderer-backgrounding',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-infobars',
+            '--disable-breakpad',],
     },
-});
+})
 
 // Evento: QR Code generato
 const qrPath = path.join(__dirname, 'qr.png');
@@ -522,7 +531,18 @@ function displaySchedule() {
 - *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
 `;
 }
+async function startClient() {
+    console.log('Inizializzando il client WhatsApp...');
+    try {
+        await client.initialize();
+    } catch (error) {
+        console.error('Errore durante l\'inizializzazione del client:', error.message);
+        console.log('Ritento l\'inizializzazione tra 5 secondi...');
+        setTimeout(startClient, 5000); // Ritenta dopo 5 secondi
+    }
+}
 
+startClient();
 // Funzione per recuperare gli slot disponibili dal database per una data specifica
 async function getAvailableSlots(date) {
     try {
@@ -546,6 +566,11 @@ async function getAvailableSlots(date) {
         return [];
     }
 }
+client.on('disconnected', (reason) => {
+    console.error(`Client disconnesso: ${reason}`);
+    console.log('Ritento la connessione...');
+    startClient();
+});
 
 
 // Gestione messaggi WhatsApp
