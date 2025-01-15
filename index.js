@@ -116,10 +116,19 @@ function validateAndFormatDate(input, schedule, discipline, day, time) {
         // Controllo: date che superano l'anno corrente
         const currentYear = today.getFullYear();
         const inputYear = parsedDate.getFullYear();
-        if (inputYear > currentYear && !(today.getMonth() === 11)) {
+        const isDecember = today.getMonth() === 11; // Verifica se siamo a dicembre
+
+        if (inputYear > currentYear && !isDecember) {
             return {
                 isValid: false,
                 message: 'Non è possibile inserire date che superano l\'anno corrente, a meno che non siamo a dicembre.',
+            };
+        }
+
+        if (inputYear > currentYear + 1 || (inputYear > currentYear && !isDecember)) {
+            return {
+                isValid: false,
+                message: 'Puoi prenotare date solo nell\'anno corrente o nel prossimo anno se siamo a dicembre.',
             };
         }
 
@@ -166,6 +175,7 @@ function validateAndFormatDate(input, schedule, discipline, day, time) {
         message: 'Formato data non valido. Usa il formato GG/MM/YYYY o GG MMMM YYYY.',
     };
 }
+
 
 
 function getAvailableDisciplines(schedule) {
@@ -568,7 +578,7 @@ client.on('message', async (message) => {
             break;
         }
         
-        
+               
 
         case 'ask_name': {
             if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il nome contenga solo lettere
