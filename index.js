@@ -752,15 +752,14 @@ client.on('message', async (message) => {
                 await message.reply('Errore sconosciuto. Riprova.');
                 clearUserState(chatId); // Reset dello stato per prevenire loop infiniti
                 break;
-        }
-catch (error) {
+        } 
+    }catch (error) {
             console.error(`Errore nella gestione dei messaggi: ${error.message}`);
             await message.reply('Si è verificato un errore. Riprova più tardi.');
             clearUserState(chatId);
-        }
-    });
+    }
 
-
+});
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
 async function updateAvailableSlots(date, time) {
     try {
