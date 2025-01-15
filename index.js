@@ -156,7 +156,6 @@ try {
 }
 
 const db = admin.database();
-const userStates = {};
 const disengagedUsers = new Set(); // Utenti disimpegnati
 
 // Configurazione email
