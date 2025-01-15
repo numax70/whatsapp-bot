@@ -143,14 +143,32 @@ function findNextAvailableDate(schedule, inputDate, discipline, time) {
 
 // Funzione per inviare il riepilogo al cliente
 async function sendWhatsAppNotification(client, phone, bookingData) {
+    if (!bookingData.name) {
+        throw new Error('Nome non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    }
+    if (!bookingData.surname) {
+        throw new Error('Cognome non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    }
+    if (!bookingData.phone) {
+        throw new Error('Numero di telefono non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    }
+    if (!bookingData.date) {
+        throw new Error('Data non specificata. Impossibile inviare il riepilogo della prenotazione.');
+    }
+    if (!bookingData.time) {
+        throw new Error('Orario non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    }
+    if (!bookingData.lessonType) {
+        throw new Error('Tipo di lezione non specificato. Impossibile inviare il riepilogo della prenotazione.');
+    }
     const message = `
 📋 *Riepilogo Prenotazione*
-👤 Nome: ${bookingData.name}
-👥 Cognome: ${bookingData.surname}
-📞 Telefono: ${bookingData.phone}
-📅 Data: ${bookingData.date}
-⏰ Ora: ${bookingData.time}
-📘 Lezione: ${bookingData.lessonType}
+👤 Nome: ${bookingData.name || 'N/A'}
+👥 Cognome: ${bookingData.surname || 'N/A'}
+📞 Telefono: ${bookingData.phone || 'N/A'}
+📅 Data: ${bookingData.date || 'N/A'}
+⏰ Ora: ${bookingData.time || 'N/A'}
+📘 Lezione: ${bookingData.lessonType || 'N/A'}
     `;
 
     try {
@@ -160,6 +178,7 @@ async function sendWhatsAppNotification(client, phone, bookingData) {
         console.error(`Errore nell'invio del riepilogo a ${phone}:`, error.message);
     }
 }
+
 
 async function clearCalendar() {
     try {
@@ -260,6 +279,24 @@ async function getSchedule(date) {
 
 // Funzione per notifiche email e riepilogo
 async function sendEmailNotification(data) {
+    if (!data.name) {
+        throw new Error('Nome non specificato. Impossibile inviare la notifica email.');
+    }
+    if (!data.surname) {
+        throw new Error('Cognome non specificato. Impossibile inviare la notifica email.');
+    }
+    if (!data.phone) {
+        throw new Error('Numero di telefono non specificato. Impossibile inviare la notifica email.');
+    }
+    if (!data.date) {
+        throw new Error('Data non specificata. Impossibile inviare la notifica email.');
+    }
+    if (!data.time) {
+        throw new Error('Orario non specificato. Impossibile inviare la notifica email.');
+    }
+    if (!data.lessonType) {
+        throw new Error('Tipo di lezione non specificato. Impossibile inviare la notifica email.');
+    }
     const emailBody = `
         Nuova prenotazione ricevuta:
         - Nome: ${data.name}
@@ -284,6 +321,7 @@ async function sendEmailNotification(data) {
         console.error('Errore nell\'invio dell\'email:', error.message);
     }
 }
+
 
 
 
@@ -402,18 +440,33 @@ client.on('message', async (message) => {
 
         case 'ask_day_time': {
             const [day, time] = userResponse.split(' ').map(s => s.trim());
-            const daySlots = schedule[day.toLowerCase()];
-            
-            if (daySlots && daySlots.some(slot => slot.lessonType === userState.data.discipline && slot.time === time)) {
-                userState.data.day = day;
-                userState.data.time = time;
-                userState.step = 'ask_date';
-                await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
+            const daySlots = schedule[day.toLowerCase()]; // Recupera gli slot per il giorno scelto
+        
+            if (daySlots) {
+                const selectedSlot = daySlots.find(slot => slot.lessonType === userState.data.discipline && slot.time === time);
+        
+                if (selectedSlot) {
+                    userState.data.day = day; // Salva il giorno scelto
+                    userState.data.time = time; // Salva l'orario scelto
+                    userState.data.lessonType = selectedSlot.lessonType; // Salva il tipo di lezione
+        
+                    userState.step = 'ask_date'; // Passa allo step successivo
+                    await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
+                } else {
+                    // Caso in cui la combinazione di giorno e orario non è valida
+                    const availableTimes = daySlots
+                        .filter(slot => slot.lessonType === userState.data.discipline)
+                        .map(slot => slot.time)
+                        .join(', ');
+                    await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${availableTimes}. Riprova.`);
+                }
             } else {
-                await message.reply('Combinazione giorno e orario non valida. Riprova con un giorno e orario validi per la disciplina scelta.');
+                // Caso in cui il giorno non è valido
+                await message.reply('Il giorno inserito non è valido. Scegli un giorno valido (ad esempio, "lunedì", "martedì", ecc.) e riprova.');
             }
             break;
         }
+        
 
         case 'ask_date': {
             const formattedDate = validateAndFormatDate(userResponse);
