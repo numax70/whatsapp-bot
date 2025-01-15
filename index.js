@@ -439,33 +439,41 @@ client.on('message', async (message) => {
         }
 
         case 'ask_day_time': {
-            const [day, time] = userResponse.split(' ').map(s => s.trim());
-            const daySlots = schedule[day.toLowerCase()]; // Recupera gli slot per il giorno scelto
+            const [day, time] = userResponse.split(' ').map(s => s.trim().toLowerCase());
         
-            if (daySlots) {
-                const selectedSlot = daySlots.find(slot => slot.lessonType === userState.data.discipline && slot.time === time);
+            // Controlla se il giorno esiste nello schedule
+            const daySlots = schedule[day];
+            if (!daySlots) {
+                await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
+                break;
+            }
         
-                if (selectedSlot) {
-                    userState.data.day = day; // Salva il giorno scelto
-                    userState.data.time = time; // Salva l'orario scelto
-                    userState.data.lessonType = selectedSlot.lessonType; // Salva il tipo di lezione
+            // Filtra gli orari disponibili per la disciplina scelta
+            const availableTimes = daySlots
+                .filter(slot => slot.lessonType === userState.data.discipline)
+                .map(slot => slot.time);
         
-                    userState.step = 'ask_date'; // Passa allo step successivo
-                    await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida, guarda il calendario (formato: GG/MM/YYYY):`);
-                } else {
-                    // Caso in cui la combinazione di giorno e orario non è valida
-                    const availableTimes = daySlots
-                        .filter(slot => slot.lessonType === userState.data.discipline)
-                        .map(slot => slot.time)
-                        .join(', ');
-                    await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${availableTimes}. Riprova.`);
-                }
+            if (availableTimes.length === 0) {
+                // Nessun orario disponibile per la disciplina scelta nel giorno selezionato
+                await message.reply(`Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`);
+                break;
+            }
+        
+            // Verifica se l'orario è valido
+            if (availableTimes.includes(time)) {
+                // Orario valido
+                userState.data.day = day;
+                userState.data.time = time;
+                userState.step = 'ask_date';
+                await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
             } else {
-                // Caso in cui il giorno non è valido
-                await message.reply('Il giorno inserito non è valido. Scegli un giorno valido (ad esempio, "lunedì", "martedì", ecc.) e riprova.');
+                // Orario non valido, ripropone gli orari disponibili
+                const timesList = availableTimes.join(', ');
+                await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`);
             }
             break;
         }
+        
         
 
         case 'ask_date': {
