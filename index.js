@@ -513,40 +513,38 @@ client.on('message', async (message) => {
         }
 
         case 'ask_phone': {
-            if (/^\d+$/.test(userResponse.trim())) { // Verifica che il numero sia composto solo da cifre
-                userState.data.phone = userResponse.trim(); // Salva il numero di telefono
-
-                // Aggiorna lo slot nel database
-                const result = await updateAvailableSlots(
-                    userState.data.date,
-                    userState.data.time
-                );
-
-                // Controlla se l'aggiornamento ha avuto successo
-                if (!result.success) {
-                    // Se non ci sono più posti disponibili, informa l'utente
-                    await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
-                    userState.step = 'ask_time'; // Torna alla selezione dell'orario
-                    const daySlots = schedule[userState.data.day.toLowerCase()];
-                    const availableTimes = daySlots
-                        .filter(slot => slot.lessonType === userState.data.discipline)
-                        .map(slot => slot.time)
-                        .join(', ');
-                    await message.reply(`Gli orari disponibili per ${userState.data.discipline} sono: ${availableTimes}.`);
-                    break;
-                }
-                // Invia riepilogo
-                await sendWhatsAppNotification(client, chatId, userState.data);
-                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                await sendEmailNotification(userState.data);
-
-                await message.reply('Prenotazione completata con successo! ✅');
-                delete userStates[chatId]; // Reset dello stato dell'utente
-            } else {
-                await message.reply('Per favore, inserisci un numero di telefono valido composto solo da cifre.');
+            const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim()); // Controlla che sia un numero di telefono valido (10-15 cifre)
+            
+            if (!isValidPhoneNumber) {
+                await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890).');
+                break; // Resta nello stato 'ask_phone'
             }
+        
+            // Salva il numero di telefono
+            userState.data.phone = userResponse.trim();
+        
+            // Aggiorna lo slot nel database
+            const result = await updateAvailableSlots(
+                userState.data.date,
+                userState.data.time
+            );
+        
+            if (!result.success) {
+                await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
+                userState.step = 'ask_time'; // Torna alla selezione dell'orario
+                break;
+            }
+        
+            // Invia riepilogo e completa la prenotazione
+            await sendWhatsAppNotification(client, chatId, userState.data);
+            await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+            await sendEmailNotification(userState.data);
+        
+            await message.reply('Prenotazione completata con successo! ✅');
+            delete userStates[chatId]; // Reset dello stato dell'utente
             break;
         }
+        
 
         default:
             await message.reply('Errore sconosciuto. Riprova.');
