@@ -498,10 +498,10 @@ client.on('message', async (message) => {
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_discipline' };
         // Messaggio di benvenuto
-        await message.reply('Benvenuto! 😊 Sono qui per aiutarti con la prenotazione delle lezioni.');
+        await message.reply('Benvenuto! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065');
         const disciplines = getAvailableDisciplines(schedule);
         await message.reply(
-            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
+            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\n|nScegli la disciplina, digita il numero.`
         );
         return;
     }
