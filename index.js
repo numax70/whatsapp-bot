@@ -400,6 +400,9 @@ async function sendEmailNotification(data) {
 async function startBot() {
     // Configurazione WhatsApp Client
     const client = new Client({ authStrategy: new LocalAuth() });
+    console.log('Client inizializzato.');
+    console.log('Client info:', client.info); // Verifica info iniziale
+    console.log('Client state:', client.state); // Verifica stato iniziale
 
     client.on('qr', (qr) => {
         console.log('QR Code generato.');
@@ -734,6 +737,8 @@ async function startBot() {
 
     client.on('ready', () =>
         console.log('Bot connesso a WhatsApp!'));
+        console.log('Client info:', client.info); // Verifica info del client
+        console.log('Client state:', client.state); // Verifica stato del client
         const logoPath = path.join(__dirname, 'logo.png');
         console.log('Percorso del logo:', logoPath); // Log del percorso del logo
         try {
