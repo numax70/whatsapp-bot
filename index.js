@@ -736,25 +736,30 @@ async function startBot() {
         console.log('Bot connesso a WhatsApp!'));
         const logoPath = path.join(__dirname, 'logo.png');
 
-    try {
-        if (fs.existsSync(logoPath)) {
-            await client.sendMessage(
-                OWNER_PHONE, // Usa la variabile OWNER_PHONE definita in alto
-                new MessageMedia('image/png', fs.readFileSync(logoPath, { encoding: 'base64' }), 'logo.png')
-            );
-            console.log('Logo inviato con successo!');
-        } else {
-            console.error('Logo non trovato nel percorso:', logoPath);
+        try {
+            // Controlla se il file logo esiste
+            if (fs.existsSync(logoPath)) {
+                console.log('Logo trovato, pronto per invio.');
+    
+                // Usa MessageMedia.fromFilePath per creare l'oggetto media
+                const logoMedia = MessageMedia.fromFilePath(logoPath);
+    
+                // Invia il logo al numero di telefono dell'owner
+                await client.sendMessage(OWNER_PHONE, logoMedia);
+                console.log('Logo inviato con successo a', OWNER_PHONE);
+    
+                // Invia un messaggio di stato dopo il logo
+                await client.sendMessage(
+                    OWNER_PHONE,
+                    `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
+                );
+                console.log('Messaggio di stato inviato con successo!');
+            } else {
+                console.error('Logo non trovato nel percorso:', logoPath);
+            }
+        } catch (error) {
+            console.error('Errore durante l\'invio del logo o del messaggio di stato:', error.message);
         }
-        // Invio del logo al proprietario all'avvio del bot
-        await sendLogo(client, OWNER_PHONE);
-        await client.sendMessage(
-            OWNER_PHONE,
-            `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
-        );
-    } catch (error) {
-        console.error('Errore durante l\'invio del logo:', error.message);
-    }
     // Avvio del server
     app.listen(process.env.PORT || 10000, async () => {
         console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
