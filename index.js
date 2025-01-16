@@ -7,6 +7,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
+const os = require('os');
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -153,7 +154,7 @@ function validateAndFormatDate(input, schedule, discipline, time) {
         }
 
         // Verifica che la combinazione giorno, orario e disciplina sia valida
-        const isValidSlot = daySlots.some(slot => 
+        const isValidSlot = daySlots.some(slot =>
             slot.lessonType === discipline && slot.time === time
         );
         if (!isValidSlot) {
@@ -396,34 +397,34 @@ async function sendEmailNotification(data) {
 
 
 
+async function startBot() {
+    // Configurazione WhatsApp Client
+    const client = new Client({ authStrategy: new LocalAuth() });
 
-// Configurazione WhatsApp Client
-const client = new Client({ authStrategy: new LocalAuth() });
-
-client.on('qr', (qr) => {
-    console.log('QR Code generato.');
-    const qrPath = path.join(__dirname, 'qr.png');
-    qrcode.toFile(qrPath, qr, (err) => {
-        if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
+    client.on('qr', (qr) => {
+        console.log('QR Code generato.');
+        const qrPath = path.join(__dirname, 'qr.png');
+        qrcode.toFile(qrPath, qr, (err) => {
+            if (err) console.error('Errore nel salvataggio del QR Code:', err.message);
+        });
     });
-});
 
-app.get('/qr', (req, res) => {
-    const qrPath = path.join(__dirname, 'qr.png');
-    if (fs.existsSync(qrPath)) {
-        res.sendFile(qrPath);
-    } else {
-        res.status(404).send('QR Code non trovato.');
-    }
-});
-app.get('/ping', (req, res) => {
-    console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
-    res.status(200).send('OK');
-});
+    app.get('/qr', (req, res) => {
+        const qrPath = path.join(__dirname, 'qr.png');
+        if (fs.existsSync(qrPath)) {
+            res.sendFile(qrPath);
+        } else {
+            res.status(404).send('QR Code non trovato.');
+        }
+    });
+    app.get('/ping', (req, res) => {
+        console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
+        res.status(200).send('OK');
+    });
 
-// Funzione per prospetto settimanale
-function displaySchedule() {
-    return `
+    // Funzione per prospetto settimanale
+    function displaySchedule() {
+        return `
 📅 *Prospetto Settimanale delle Lezioni*
 - *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE, 12:00 PILATES EXO CHAIR, 13:30 PILATES DANCE BARRE, 14:30, PILATES MATWORK
 - *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
@@ -431,299 +432,299 @@ function displaySchedule() {
 - *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
 - *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
 `;
-}
-
-// Funzione per recuperare gli slot disponibili dal database per una data specifica
-async function getAvailableSlots(date) {
-    try {
-        const ref = db.ref(`calendario/${date}`);
-        const snapshot = await ref.once('value');
-        const slots = snapshot.val();
-
-        if (!slots) {
-            return []; // Nessuno slot disponibile per quella data
-        }
-
-        // Costruisce il prospetto con posti disponibili
-        return slots.map((slot, index) => ({
-            index: index + 1,
-            time: slot.time,
-            lessonType: slot.lessonType,
-            remaining: slot.remaining || 10 // Di default 10 posti se non esiste il campo
-        }));
-    } catch (error) {
-        console.error(`Errore durante il recupero degli slot per ${date}:`, error.message);
-        return [];
-    }
-}
-
-
-// Gestione messaggi WhatsApp
-client.on('message', async (message) => {
-    const chatId = message.from;
-    const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
-
-    // Funzione per rimuovere accenti e normalizzare il testo
-    function removeAccents(str) {
-        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     }
 
-   // Controlla se l'utente è nella lista di utenti disimpegnati
-    if (disengagedUsers.has(chatId)) {
-        if (userResponse === 'prenotazione') {
-            // Rimuovi utente dai disimpegnati e reimposta stato
-            disengagedUsers.delete(chatId);
-            userStates[chatId] = { step: 'ask_discipline' };
-            const disciplines = getAvailableDisciplines(schedule);
-            // Invia logo di benvenuto
-            const logoPath = path.join(__dirname, 'logo.png'); // Assicurati che 'logo.png' sia nella directory
-            if (fs.existsSync(logoPath)) {
-                console.log('Logo trovato:', logoPath);
-                await client.sendMessage(chatId, {
-                    body: '',
-                    media: MessageMedia.fromFilePath(logoPath),
-                });
-            }else{
-                console.error('Logo non trovato:', logoPath);
+    // Funzione per recuperare gli slot disponibili dal database per una data specifica
+    async function getAvailableSlots(date) {
+        try {
+            const ref = db.ref(`calendario/${date}`);
+            const snapshot = await ref.once('value');
+            const slots = snapshot.val();
+
+            if (!slots) {
+                return []; // Nessuno slot disponibile per quella data
             }
-            // Messaggio di benvenuto con informazioni
-            await message.reply(
-                `Benvenuto su ! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
-            );
-            
-        } else {
-            await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
+
+            // Costruisce il prospetto con posti disponibili
+            return slots.map((slot, index) => ({
+                index: index + 1,
+                time: slot.time,
+                lessonType: slot.lessonType,
+                remaining: slot.remaining || 10 // Di default 10 posti se non esiste il campo
+            }));
+        } catch (error) {
+            console.error(`Errore durante il recupero degli slot per ${date}:`, error.message);
+            return [];
         }
-        return;
     }
 
-    // Se l'utente non ha uno stato attivo, inizializza
-    if (!userStates[chatId]) {
-        userStates[chatId] = { step: 'ask_discipline' };
-        // Messaggio di benvenuto
-        await message.reply('Benvenuto su ! 😊 \n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065');
-        const disciplines = getAvailableDisciplines(schedule);
-        await message.reply(
-            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli una disciplina, digitando il numero corrispondente.`
-        );
-        return;
-    }
 
-    const userState = userStates[chatId];
+    // Gestione messaggi WhatsApp
+    client.on('message', async (message) => {
+        const chatId = message.from;
+        const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
 
-    // Gestione del flusso
-    try {
-        switch (userState.step) {
-            case 'ask_discipline': {
+        // Funzione per rimuovere accenti e normalizzare il testo
+        function removeAccents(str) {
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        }
+
+        // Controlla se l'utente è nella lista di utenti disimpegnati
+        if (disengagedUsers.has(chatId)) {
+            if (userResponse === 'prenotazione') {
+                // Rimuovi utente dai disimpegnati e reimposta stato
+                disengagedUsers.delete(chatId);
+                userStates[chatId] = { step: 'ask_discipline' };
                 const disciplines = getAvailableDisciplines(schedule);
-                const disciplineIndex = parseInt(userResponse, 10) - 1;
-
-                if (disciplines[disciplineIndex]) {
-                    userState.data = { discipline: disciplines[disciplineIndex] };
-                    userState.step = 'ask_day_time';
-
-                     // Mostra i giorni e gli orari disponibili
-                     const dayTimeOptions = Object.entries(schedule)
-                    .filter(([day, slots]) => slots.some(slot => slot.lessonType === userState.data.discipline))
-                    .map(([day, slots]) => {
-                        const times = slots
-                            .filter(slot => slot.lessonType === userState.data.discipline)
-                            .map(slot => slot.time)
-                            .join(', ');
-                        return `${day}: ${times}`;
-                    }).join('\n');
-
-                await message.reply(`Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`);
-            } else {
-                await message.reply('Disciplina non valida. Riprova con un numero valido.');
-            }
-            break;
-        }
-
-        case 'ask_day_time': {
-            const userInput = userResponse.split(' ').map(s => s.trim());
-            let [day, time] = userInput;
-
-            // Normalizza il giorno usando removeAccents
-            day = removeAccents(day);
-
-            // Verifica se il giorno esiste nello schedule
-            const scheduleDay = Object.keys(schedule).find(
-                key => removeAccents(key) === day
-            );
-
-            if (!scheduleDay) {
-                await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
-                break;
-            }
-
-            // Filtra gli orari disponibili per la disciplina scelta
-            const availableTimes = schedule[scheduleDay]
-                .filter(slot => slot.lessonType === userState.data.discipline)
-                .map(slot => slot.time);
-
-            if (!availableTimes.includes(time)) {
-                // Costruisce un messaggio valido anche se `availableTimes` è vuoto
-                const timesList = availableTimes.length
-                    ? availableTimes.join(', ')
-                    : 'Nessun orario disponibile';
-
-                await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${scheduleDay}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`);
-                break;
-            }
-
-            // Orario valido
-            const selectedSlot = schedule[scheduleDay].find(
-                slot => slot.lessonType === userState.data.discipline && slot.time === time
-            );
-            userState.data.day = scheduleDay;
-            userState.data.time = time;
-            userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
-            userState.step = 'ask_date';
-
-            await message.reply(`Hai scelto ${userState.data.discipline} il ${scheduleDay} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
-            break;
-        }
-            
-
-            case 'ask_date': {
-                const validationResult = validateAndFormatDate(
-                    userResponse,
-                    schedule,
-                    userState.data.discipline,
-                    userState.data.time
+                // Invia logo di benvenuto
+                const logoPath = path.join(__dirname, 'logo.png'); // Assicurati che 'logo.png' sia nella directory
+                if (fs.existsSync(logoPath)) {
+                    console.log('Logo trovato:', logoPath);
+                    await client.sendMessage(chatId, {
+                        body: '',
+                        media: MessageMedia.fromFilePath(logoPath),
+                    });
+                } else {
+                    console.error('Logo non trovato:', logoPath);
+                }
+                // Messaggio di benvenuto con informazioni
+                await message.reply(
+                    `Benvenuto su ! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
                 );
 
-                if (!validationResult.isValid) {
-                    await message.reply(validationResult.message);
-                } else {
-                    userState.data.date = validationResult.date;
-                    userState.step = 'ask_name';
-                    await message.reply(`La data scelta è ${validationResult.date}. Procediamo! Inserisci il tuo nome:`);
-                }
-                break;
+            } else {
+                await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
             }
+            return;
+        }
 
-            case 'ask_name': {
-                if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
-                    userState.data.name = userResponse.trim();
-                    userState.step = 'ask_surname';
-                    await message.reply('Perfetto! Ora inserisci il tuo cognome:');
-                } else {
-                    await message.reply('Per favore, inserisci un nome valido composto solo da lettere.');
-                }
-                break;
-            }
+        // Se l'utente non ha uno stato attivo, inizializza
+        if (!userStates[chatId]) {
+            userStates[chatId] = { step: 'ask_discipline' };
+            // Messaggio di benvenuto
+            await message.reply('Benvenuto su ! 😊 \n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065');
+            const disciplines = getAvailableDisciplines(schedule);
+            await message.reply(
+                `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli una disciplina, digitando il numero corrispondente.`
+            );
+            return;
+        }
 
-            case 'ask_surname': {
-                if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
-                    userState.data.surname = userResponse.trim();
-                    userState.step = 'ask_phone';
-                    await message.reply('Inserisci il tuo numero di telefono:');
-                } else {
-                    await message.reply('Per favore, inserisci un cognome valido composto solo da lettere.');
-                }
-                break;
-            }
+        const userState = userStates[chatId];
 
-            case 'ask_phone': {
-                const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
-                if (!isValidPhoneNumber) {
-                    await message.reply(
-                        'Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).'
-                    );
+        // Gestione del flusso
+        try {
+            switch (userState.step) {
+                case 'ask_discipline': {
+                    const disciplines = getAvailableDisciplines(schedule);
+                    const disciplineIndex = parseInt(userResponse, 10) - 1;
+
+                    if (disciplines[disciplineIndex]) {
+                        userState.data = { discipline: disciplines[disciplineIndex] };
+                        userState.step = 'ask_day_time';
+
+                        // Mostra i giorni e gli orari disponibili
+                        const dayTimeOptions = Object.entries(schedule)
+                            .filter(([day, slots]) => slots.some(slot => slot.lessonType === userState.data.discipline))
+                            .map(([day, slots]) => {
+                                const times = slots
+                                    .filter(slot => slot.lessonType === userState.data.discipline)
+                                    .map(slot => slot.time)
+                                    .join(', ');
+                                return `${day}: ${times}`;
+                            }).join('\n');
+
+                        await message.reply(`Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`);
+                    } else {
+                        await message.reply('Disciplina non valida. Riprova con un numero valido.');
+                    }
                     break;
                 }
 
-                userState.data.phone = userResponse.trim();
+                case 'ask_day_time': {
+                    const userInput = userResponse.split(' ').map(s => s.trim());
+                    let [day, time] = userInput;
 
-                try {
-                    const result = await updateAvailableSlots(
-                        userState.data.date,
-                        userState.data.time
+                    // Normalizza il giorno usando removeAccents
+                    day = removeAccents(day);
+
+                    // Verifica se il giorno esiste nello schedule
+                    const scheduleDay = Object.keys(schedule).find(
+                        key => removeAccents(key) === day
                     );
 
-                    if (!result.success) {
-                        await message.reply(
-                            'Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.'
-                        );
-                        userState.step = 'ask_day_time';
+                    if (!scheduleDay) {
+                        await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
                         break;
                     }
 
-                    await sendWhatsAppNotification(client, chatId, userState.data);
-                    await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                    await sendEmailNotification(userState.data);
+                    // Filtra gli orari disponibili per la disciplina scelta
+                    const availableTimes = schedule[scheduleDay]
+                        .filter(slot => slot.lessonType === userState.data.discipline)
+                        .map(slot => slot.time);
 
-                    await message.reply('Prenotazione completata con successo! ✅');
-                } catch (error) {
-                    console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
-                    await message.reply(
-                        'Si è verificato un errore durante la prenotazione. Riprova più tardi.'
-                    );
-                }
+                    if (!availableTimes.includes(time)) {
+                        // Costruisce un messaggio valido anche se `availableTimes` è vuoto
+                        const timesList = availableTimes.length
+                            ? availableTimes.join(', ')
+                            : 'Nessun orario disponibile';
 
-                delete userStates[chatId];
-                break;
-            }
-
-            default:
-                await message.reply('Errore sconosciuto. Riprova.');
-                delete userStates[chatId];  // Reset dello stato per prevenire loop infiniti
-                break;
-        }
-    } catch (error) {
-        console.error(`Errore generale: ${error.message}`);
-        await message.reply('Si è verificato un errore. Per favore, riprova più tardi.');
-        delete userStates[chatId]; 
-    }
-});
-
-
-
-// Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato usando una transazione
-async function updateAvailableSlots(date, time) {
-    const ref = db.ref(`calendario/${date}`);
-    try {
-        const transactionResult = await ref.transaction((slots) => {
-            if (!slots) return null; // Se non ci sono slot, ritorna null
-            return slots.map((slot) => {
-                if (slot.time === time) {
-                    if (!slot.remainingSeats || slot.remainingSeats <= 0) {
-                        throw new Error('Non ci sono più posti disponibili per questo orario.');
+                        await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${scheduleDay}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`);
+                        break;
                     }
-                    return { ...slot, remainingSeats: slot.remainingSeats - 1 };
+
+                    // Orario valido
+                    const selectedSlot = schedule[scheduleDay].find(
+                        slot => slot.lessonType === userState.data.discipline && slot.time === time
+                    );
+                    userState.data.day = scheduleDay;
+                    userState.data.time = time;
+                    userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
+                    userState.step = 'ask_date';
+
+                    await message.reply(`Hai scelto ${userState.data.discipline} il ${scheduleDay} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
+                    break;
                 }
-                return slot;
-            });
-        });
 
-        if (!transactionResult.committed) {
-            return { success: false, message: 'Un altro utente ha prenotato questo slot. Prova con un altro orario.' };
+
+                case 'ask_date': {
+                    const validationResult = validateAndFormatDate(
+                        userResponse,
+                        schedule,
+                        userState.data.discipline,
+                        userState.data.time
+                    );
+
+                    if (!validationResult.isValid) {
+                        await message.reply(validationResult.message);
+                    } else {
+                        userState.data.date = validationResult.date;
+                        userState.step = 'ask_name';
+                        await message.reply(`La data scelta è ${validationResult.date}. Procediamo! Inserisci il tuo nome:`);
+                    }
+                    break;
+                }
+
+                case 'ask_name': {
+                    if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
+                        userState.data.name = userResponse.trim();
+                        userState.step = 'ask_surname';
+                        await message.reply('Perfetto! Ora inserisci il tuo cognome:');
+                    } else {
+                        await message.reply('Per favore, inserisci un nome valido composto solo da lettere.');
+                    }
+                    break;
+                }
+
+                case 'ask_surname': {
+                    if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
+                        userState.data.surname = userResponse.trim();
+                        userState.step = 'ask_phone';
+                        await message.reply('Inserisci il tuo numero di telefono:');
+                    } else {
+                        await message.reply('Per favore, inserisci un cognome valido composto solo da lettere.');
+                    }
+                    break;
+                }
+
+                case 'ask_phone': {
+                    const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
+                    if (!isValidPhoneNumber) {
+                        await message.reply(
+                            'Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).'
+                        );
+                        break;
+                    }
+
+                    userState.data.phone = userResponse.trim();
+
+                    try {
+                        const result = await updateAvailableSlots(
+                            userState.data.date,
+                            userState.data.time
+                        );
+
+                        if (!result.success) {
+                            await message.reply(
+                                'Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.'
+                            );
+                            userState.step = 'ask_day_time';
+                            break;
+                        }
+
+                        await sendWhatsAppNotification(client, chatId, userState.data);
+                        await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                        await sendEmailNotification(userState.data);
+
+                        await message.reply('Prenotazione completata con successo! ✅');
+                    } catch (error) {
+                        console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
+                        await message.reply(
+                            'Si è verificato un errore durante la prenotazione. Riprova più tardi.'
+                        );
+                    }
+
+                    delete userStates[chatId];
+                    break;
+                }
+
+                default:
+                    await message.reply('Errore sconosciuto. Riprova.');
+                    delete userStates[chatId];  // Reset dello stato per prevenire loop infiniti
+                    break;
+            }
+        } catch (error) {
+            console.error(`Errore generale: ${error.message}`);
+            await message.reply('Si è verificato un errore. Per favore, riprova più tardi.');
+            delete userStates[chatId];
         }
-        return { success: true };
-    } catch (error) {
-        console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
-        return { success: false, message: error.message };
+    });
+
+
+
+    // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato usando una transazione
+    async function updateAvailableSlots(date, time) {
+        const ref = db.ref(`calendario/${date}`);
+        try {
+            const transactionResult = await ref.transaction((slots) => {
+                if (!slots) return null; // Se non ci sono slot, ritorna null
+                return slots.map((slot) => {
+                    if (slot.time === time) {
+                        if (!slot.remainingSeats || slot.remainingSeats <= 0) {
+                            throw new Error('Non ci sono più posti disponibili per questo orario.');
+                        }
+                        return { ...slot, remainingSeats: slot.remainingSeats - 1 };
+                    }
+                    return slot;
+                });
+            });
+
+            if (!transactionResult.committed) {
+                return { success: false, message: 'Un altro utente ha prenotato questo slot. Prova con un altro orario.' };
+            }
+            return { success: true };
+        } catch (error) {
+            console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
+            return { success: false, message: error.message };
+        }
     }
-}
 
 
-// Ping per evitare sospensione
-app.get('/ping', (req, res) => {
-    res.status(200).send('OK');
-});
+    // Ping per evitare sospensione
+    app.get('/ping', (req, res) => {
+        res.status(200).send('OK');
+    });
 
-// Monitoraggio risorse
-setInterval(() => {
-    console.log(`RAM Utilizzata: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
-}, 60000);
+    // Monitoraggio risorse
+    setInterval(() => {
+        console.log(`RAM Utilizzata: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
+        console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
+    }, 60000);
 
-client.on('ready', () => 
-    console.log('Bot connesso a WhatsApp!'));
+    client.on('ready', () =>
+        console.log('Bot connesso a WhatsApp!'));
     const logoPath = path.join(__dirname, 'logo.png');
-    
+
     try {
         if (fs.existsSync(logoPath)) {
             await client.sendMessage(
@@ -741,15 +742,18 @@ client.on('ready', () =>
     } catch (error) {
         console.error('Errore durante l\'invio del logo:', error.message);
     }
-// Avvio del server
-app.listen(process.env.PORT || 10000, async () => {
-    console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-    await clearCalendar();
-    await populateCalendarWithValidation();
-    await migrateRemainingSeats();
-});
-async function startBot() {
+    // Avvio del server
+    app.listen(process.env.PORT || 10000, async () => {
+        console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
+        await clearCalendar();
+        await populateCalendarWithValidation();
+        await migrateRemainingSeats();
+    });
+
     await client.initialize();
-    console.log('Bot avviato!');
 }
-startBot().catch(console.error);
+
+// Avvio del bot
+startBot().catch((error) => {
+    console.error('Errore durante l\'avvio del bot:', error);
+});
