@@ -739,36 +739,44 @@ async function startBot() {
     try {
         client.on('ready', async () => {
             console.log('Bot connesso a WhatsApp!');
-            console.log('Client info:', client.info);
-            console.log('Client state:', client.state);
+            console.log('Client info:', client.info || 'Nessuna info disponibile');
+            console.log('Client state:', client.state || 'Nessuno stato disponibile');
         
             const logoPath = path.join(__dirname, 'logo.png');
             console.log('Percorso del logo:', logoPath);
         
-            try {
-                if (fs.existsSync(logoPath)) {
-                    console.log('Logo trovato, pronto per invio.');
+            if (fs.existsSync(logoPath)) {
+                try {
+                    const logoStats = fs.statSync(logoPath);
+                    console.log('Logo trovato! Dimensioni:', logoStats.size, 'byte');
         
-                    /* const logoBase64 = fs.readFileSync(logoPath, { encoding: 'base64' }); */
-                    // Utilizza MessageMedia.fromFilePath per inviare il file direttamente
-                    const logoMedia = MessageMedia.fromFilePath(logoPath);
+                    // Carica il logo come Base64
+                    const logoBase64 = fs.readFileSync(logoPath, { encoding: 'base64' });
+                    console.log('Logo Base64 Length:', logoBase64.length);
         
+                    // Crea l'oggetto MessageMedia
+                    const logoMedia = new MessageMedia('image/png', logoBase64, 'logo.png');
+                    console.log('Oggetto MessageMedia creato con successo.');
+        
+                    // Invia il logo al numero di telefono dell'owner
+                    console.log(`Tentativo di invio del logo a ${OWNER_PHONE}`);
                     await client.sendMessage(OWNER_PHONE, logoMedia);
                     console.log('Logo inviato con successo a', OWNER_PHONE);
         
-                    // Messaggio di conferma dopo l'invio del logo
+                    // Invia un messaggio di conferma dopo il logo
                     await client.sendMessage(
                         OWNER_PHONE,
                         `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
                     );
                     console.log('Messaggio di stato inviato con successo!');
-                } else {
-                    console.error('Logo non trovato nel percorso:', logoPath);
+                } catch (error) {
+                    console.error('Errore durante l\'invio del logo o del messaggio di stato:', error.message);
                 }
-            } catch (error) {
-                console.error('Errore durante l\'invio del logo o del messaggio di stato:', error.message);
+            } else {
+                console.error('Logo non trovato nel percorso:', logoPath);
             }
         });
+        
     
         // Avvio del server
         app.listen(process.env.PORT || 10000, async () => {
