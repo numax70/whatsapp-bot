@@ -531,9 +531,10 @@ client.on('message', async (message) => {
                     );
                     break;
                 }
-
+            
                 const [day, time] = userInput;
-
+            
+                // Controlla se il giorno esiste nello schedule
                 const daySlots = schedule[day];
                 if (!daySlots) {
                     await message.reply(
@@ -541,32 +542,47 @@ client.on('message', async (message) => {
                     );
                     break;
                 }
-
+            
+                // Filtra gli orari disponibili per la disciplina scelta
                 const availableTimes = daySlots
                     .filter(slot => slot.lessonType === userState.data.discipline)
                     .map(slot => slot.time);
-
+            
+                if (!availableTimes.length) {
+                    await message.reply(
+                        `Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`
+                    );
+                    break;
+                }
+            
+                // Verifica se l'orario è valido
                 if (!availableTimes.includes(time)) {
-                    const timesList = availableTimes.join(', ');
+                    // Costruisce un messaggio valido anche se `availableTimes` è vuoto
+                    const timesList = availableTimes.length
+                        ? availableTimes.join(', ')
+                        : 'Nessun orario disponibile';
+                    
                     await message.reply(
                         `L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`
                     );
                     break;
                 }
-
+            
+                // Orario valido
                 const selectedSlot = daySlots.find(
                     slot => slot.lessonType === userState.data.discipline && slot.time === time
                 );
                 userState.data.day = day;
                 userState.data.time = time;
-                userState.data.lessonType = selectedSlot.lessonType;
+                userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
                 userState.step = 'ask_date';
-
+            
                 await message.reply(
                     `Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`
                 );
                 break;
             }
+            
 
             case 'ask_date': {
                 const validationResult = validateAndFormatDate(
