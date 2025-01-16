@@ -474,7 +474,7 @@ async function startBot() {
 
         // Funzione per inviare il logo
         async function sendLogo(client, recipient) {
-            const logoPath = path.join(__dirname, 'logo.png');
+            const logoPath = path.join(__dirname, 'logo.jpg');
             console.log('Percorso assoluto del logo:', logoPath); // Log del percorso
             try {
                 if (fs.existsSync(logoPath)) {
@@ -742,7 +742,7 @@ async function startBot() {
             console.log('Client info:', client.info || 'Nessuna info disponibile');
             console.log('Client state:', client.state || 'Nessuno stato disponibile');
         
-            const logoPath = path.join(__dirname, 'logo.png');
+            const logoPath = path.join(__dirname, 'logo.jpg');
             console.log('Percorso del logo:', logoPath);
         
             if (fs.existsSync(logoPath)) {
@@ -755,7 +755,7 @@ async function startBot() {
                     console.log('Logo Base64 Length:', logoBase64.length);
         
                     // Crea l'oggetto MessageMedia
-                    const logoMedia = new MessageMedia('image/png', logoBase64, 'logo.png');
+                    const logoMedia = new MessageMedia('image/png', logoBase64, 'logo.jpg');
                     console.log('Oggetto MessageMedia creato con successo.');
         
                     // Invia il logo al numero di telefono dell'owner
