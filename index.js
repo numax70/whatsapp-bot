@@ -428,13 +428,13 @@ async function startBot() {
     // Funzione per prospetto settimanale
     function displaySchedule() {
         return `
-📅 *Prospetto Settimanale delle Lezioni*
-- *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE, 12:00 PILATES EXO CHAIR, 13:30 PILATES DANCE BARRE, 14:30, PILATES MATWORK
-- *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
-- *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
-- *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
-- *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
-`;
+    📅 *Prospetto Settimanale delle Lezioni*
+    - *Lunedì*: 09:30 PILATES MATWORK, 10:30 POSTURALE, 12:00 PILATES EXO CHAIR, 13:30 PILATES DANCE BARRE, 14:30, PILATES MATWORK
+    - *Martedì*: 13:30 GIROKYNESIS, 15:00 PILATES MATWORK
+    - *Mercoledì*: 09:30 PILATES MATWORK, 12:00 PILATES EXO CHAIR
+    - *Giovedì*: 13:30 GIROKYNESIS, 18:00 YOGA
+    - *Venerdì*: 14:00 PILATES MATWORK, 17:00 FUNCTIONAL TRAINER MOVEMENT
+    `;
     }
 
     // Funzione per recuperare gli slot disponibili dal database per una data specifica
@@ -472,8 +472,8 @@ async function startBot() {
             return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
 
-         // Funzione per inviare il logo
-         async function sendLogo(client, recipient) {
+        // Funzione per inviare il logo
+        async function sendLogo(client, recipient) {
             const logoPath = path.join(__dirname, 'logo.png');
             console.log('Percorso assoluto del logo:', logoPath); // Log del percorso
             try {
@@ -488,18 +488,18 @@ async function startBot() {
             } catch (error) {
                 console.error('Errore durante l\'invio del logo:', error.message);
             }
-    }
+        }
         // Controlla se l'utente è nella lista di utenti disimpegnati
         if (disengagedUsers.has(chatId)) {
             if (userResponse === 'prenotazione') {
                 // Rimuovi utente dai disimpegnati e reimposta stato
                 disengagedUsers.delete(chatId);
                 userStates[chatId] = { step: 'ask_discipline' };
-                 // Invio del logo
+                // Invio del logo
                 await sendLogo(client, chatId);
                 const disciplines = getAvailableDisciplines(schedule);
-                
-               
+
+
 
                 // Messaggio di benvenuto con informazioni
                 await message.reply(
@@ -735,51 +735,61 @@ async function startBot() {
         console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
     }, 60000);
 
-    client.on('ready', () =>
-        console.log('Bot connesso a WhatsApp!'));
-        console.log('Client info:', client.info); // Verifica info del client
-        console.log('Client state:', client.state); // Verifica stato del client
-        const logoPath = path.join(__dirname, 'logo.png');
-        console.log('Percorso del logo:', logoPath); // Log del percorso del logo
-        try {
-            // Controlla se il file logo esiste
-            if (fs.existsSync(logoPath)) {
-                console.log('Logo trovato, pronto per invio.');
+    try {
+        client.on('ready', async () => {
+            console.log('Bot connesso a WhatsApp!');
+            console.log('Client info:', client.info); // Verifica info del client
+            console.log('Client state:', client.state); // Verifica stato del client
     
-                // Usa MessageMedia.fromFilePath per creare l'oggetto media
-                const logoMedia = MessageMedia.fromFilePath(logoPath);
+            const logoPath = path.join(__dirname, 'logo.png');
+            console.log('Percorso del logo:', logoPath); // Log del percorso del logo
     
-                // Invia il logo al numero di telefono dell'owner
-                if (client.info && client.info.wid) {
-                    await client.sendMessage(OWNER_PHONE, logoMedia);
-                    console.log('Logo inviato con successo a', OWNER_PHONE);
-                    // Invia un messaggio di stato dopo il logo
-                    await client.sendMessage(
-                         OWNER_PHONE,
-                         `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
-                    );
-                    console.log('Messaggio di stato inviato con successo!');
+            try {
+                // Controlla se il file logo esiste
+                if (fs.existsSync(logoPath)) {
+                    console.log('Logo trovato, pronto per invio.');
+    
+                    // Invia il logo al numero di telefono dell'owner
+                    if (client.info && client.info.wid) {
+                        // Usa MessageMedia.fromFilePath per creare l'oggetto media
+                        const logoMedia = MessageMedia.fromFilePath(logoPath);
+    
+                        // Invio del logo
+                        await client.sendMessage(OWNER_PHONE, logoMedia);
+                        console.log('Logo inviato con successo a', OWNER_PHONE);
+    
+                        // Invia un messaggio di stato dopo il logo
+                        await client.sendMessage(
+                            OWNER_PHONE,
+                            `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
+                        );
+                        console.log('Messaggio di stato inviato con successo!');
+                    } else {
+                        console.error('Client non completamente pronto. Stato attuale:', client.state);
+                    }
                 } else {
-                    console.error('Il client non è completamente inizializzato.');
-                }    
-                
-                
-            } else {
-                console.error('Logo non trovato nel percorso:', logoPath);
+                    console.error('Logo non trovato nel percorso:', logoPath);
+                }
+            } catch (error) {
+                console.error('Errore durante l\'invio del logo o del messaggio di stato:', error.message);
             }
-        } catch (error) {
-            console.error('Errore durante l\'invio del logo o del messaggio di stato:', error.message);
-        }
-    // Avvio del server
-    app.listen(process.env.PORT || 10000, async () => {
-        console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
-        await clearCalendar();
-        await populateCalendarWithValidation();
-        await migrateRemainingSeats();
-    });
-
-    await client.initialize();
-}
+        });
+    
+        // Avvio del server
+        app.listen(process.env.PORT || 10000, async () => {
+            console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
+            await clearCalendar();
+            await populateCalendarWithValidation();
+            await migrateRemainingSeats();
+        });
+    
+        // Inizializzazione del client
+        await client.initialize();
+        console.log('Client inizializzato correttamente!');
+    } catch (error) {
+        console.error('Errore durante l\'avvio del bot:', error.message);
+    }
+}    
 
 // Avvio del bot
 startBot().catch((error) => {
