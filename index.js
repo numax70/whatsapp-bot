@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const fs = require('fs');
 const path = require('path');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, MessageMedia, LocalAuth  } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
@@ -478,6 +478,7 @@ async function startBot() {
             console.log('Percorso assoluto del logo:', logoPath); // Log del percorso
             try {
                 if (fs.existsSync(logoPath)) {
+                    console.log('Logo trovato, pronto per invio.');
                     // Creazione del media dal file direttamente
                     const logoMedia = MessageMedia.fromFilePath(logoPath);
                     await client.sendMessage(recipient, logoMedia);
@@ -738,35 +739,29 @@ async function startBot() {
     try {
         client.on('ready', async () => {
             console.log('Bot connesso a WhatsApp!');
-            console.log('Client info:', client.info); // Verifica info del client
-            console.log('Client state:', client.state); // Verifica stato del client
-    
+            console.log('Client info:', client.info);
+            console.log('Client state:', client.state);
+        
             const logoPath = path.join(__dirname, 'logo.png');
-            console.log('Percorso del logo:', logoPath); // Log del percorso del logo
-    
+            console.log('Percorso del logo:', logoPath);
+        
             try {
-                // Controlla se il file logo esiste
                 if (fs.existsSync(logoPath)) {
                     console.log('Logo trovato, pronto per invio.');
-    
-                    // Invia il logo al numero di telefono dell'owner
-                    if (client.info && client.info.wid) {
-                        // Usa MessageMedia.fromFilePath per creare l'oggetto media
-                        const logoMedia = MessageMedia.fromFilePath(logoPath);
-    
-                        // Invio del logo
-                        await client.sendMessage(OWNER_PHONE, logoMedia);
-                        console.log('Logo inviato con successo a', OWNER_PHONE);
-    
-                        // Invia un messaggio di stato dopo il logo
-                        await client.sendMessage(
-                            OWNER_PHONE,
-                            `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
-                        );
-                        console.log('Messaggio di stato inviato con successo!');
-                    } else {
-                        console.error('Client non completamente pronto. Stato attuale:', client.state);
-                    }
+        
+                    /* const logoBase64 = fs.readFileSync(logoPath, { encoding: 'base64' }); */
+                    // Utilizza MessageMedia.fromFilePath per inviare il file direttamente
+                    const logoMedia = MessageMedia.fromFilePath(logoPath);
+        
+                    await client.sendMessage(OWNER_PHONE, logoMedia);
+                    console.log('Logo inviato con successo a', OWNER_PHONE);
+        
+                    // Messaggio di conferma dopo l'invio del logo
+                    await client.sendMessage(
+                        OWNER_PHONE,
+                        `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
+                    );
+                    console.log('Messaggio di stato inviato con successo!');
                 } else {
                     console.error('Logo non trovato nel percorso:', logoPath);
                 }
