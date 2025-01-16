@@ -478,14 +478,17 @@ client.on('message', async (message) => {
             // Invia logo di benvenuto
             const logoPath = path.join(__dirname, 'logo.png'); // Assicurati che 'logo.png' sia nella directory
             if (fs.existsSync(logoPath)) {
+                console.log('Logo trovato:', logoPath);
                 await client.sendMessage(chatId, {
                     body: '',
                     media: MessageMedia.fromFilePath(logoPath),
                 });
+            }else{
+                console.error('Logo non trovato:', logoPath);
             }
             // Messaggio di benvenuto con informazioni
             await message.reply(
-                `Benvenuto! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
+                `Benvenuto su ! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
             );
             
         } else {
@@ -498,10 +501,10 @@ client.on('message', async (message) => {
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_discipline' };
         // Messaggio di benvenuto
-        await message.reply('Benvenuto! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065');
+        await message.reply('Benvenuto su ! 😊 \n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065');
         const disciplines = getAvailableDisciplines(schedule);
         await message.reply(
-            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\n|nScegli la disciplina, digita il numero.`
+            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli una disciplina, digitando il numero corrispondente.`
         );
         return;
     }
@@ -717,7 +720,27 @@ setInterval(() => {
     console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
 }, 60000);
 
-client.on('ready', () => console.log('Bot connesso a WhatsApp!'));
+client.on('ready', () => 
+    console.log('Bot connesso a WhatsApp!'));
+    const logoPath = path.join(__dirname, 'logo.png');
+    
+    try {
+        if (fs.existsSync(logoPath)) {
+            await client.sendMessage(
+                OWNER_PHONE, // Usa la variabile OWNER_PHONE definita in alto
+                new MessageMedia('image/png', fs.readFileSync(logoPath, { encoding: 'base64' }), 'logo.png')
+            );
+            console.log('Logo inviato con successo!');
+        } else {
+            console.error('Logo non trovato nel percorso:', logoPath);
+        }
+        await client.sendMessage(
+            OWNER_PHONE,
+            `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
+        );
+    } catch (error) {
+        console.error('Errore durante l\'invio del logo:', error.message);
+    }
 // Avvio del server
 app.listen(process.env.PORT || 10000, async () => {
     console.log(`Server in ascolto sulla porta ${process.env.PORT || 10000}`);
