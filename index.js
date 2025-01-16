@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const fs = require('fs');
 const path = require('path');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
@@ -469,24 +469,34 @@ async function startBot() {
             return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         }
 
+         // Funzione per inviare il logo
+         async function sendLogo(client, recipient) {
+            const logoPath = path.join(__dirname, 'logo.png');
+            try {
+                if (fs.existsSync(logoPath)) {
+                    const logoBase64 = fs.readFileSync(logoPath, { encoding: 'base64' });
+                    const logoMedia = new MessageMedia('image/png', logoBase64, 'logo.png');
+                    await client.sendMessage(recipient, logoMedia);
+                    console.log(`Logo inviato con successo a ${recipient}!`);
+                } else {
+                    console.error('Logo non trovato:', logoPath);
+                }
+            } catch (error) {
+                console.error('Errore durante l\'invio del logo:', error.message);
+            }
+    }
         // Controlla se l'utente è nella lista di utenti disimpegnati
         if (disengagedUsers.has(chatId)) {
             if (userResponse === 'prenotazione') {
                 // Rimuovi utente dai disimpegnati e reimposta stato
                 disengagedUsers.delete(chatId);
                 userStates[chatId] = { step: 'ask_discipline' };
+                 // Invio del logo
+                await sendLogo(client, chatId);
                 const disciplines = getAvailableDisciplines(schedule);
-                // Invia logo di benvenuto
-                const logoPath = path.join(__dirname, 'logo.png'); // Assicurati che 'logo.png' sia nella directory
-                if (fs.existsSync(logoPath)) {
-                    console.log('Logo trovato:', logoPath);
-                    await client.sendMessage(chatId, {
-                        body: '',
-                        media: MessageMedia.fromFilePath(logoPath),
-                    });
-                } else {
-                    console.error('Logo non trovato:', logoPath);
-                }
+                
+               
+
                 // Messaggio di benvenuto con informazioni
                 await message.reply(
                     `Benvenuto su ! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
@@ -723,7 +733,7 @@ async function startBot() {
 
     client.on('ready', () =>
         console.log('Bot connesso a WhatsApp!'));
-    const logoPath = path.join(__dirname, 'logo.png');
+        const logoPath = path.join(__dirname, 'logo.png');
 
     try {
         if (fs.existsSync(logoPath)) {
@@ -735,6 +745,8 @@ async function startBot() {
         } else {
             console.error('Logo non trovato nel percorso:', logoPath);
         }
+        // Invio del logo al proprietario all'avvio del bot
+        await sendLogo(client, OWNER_PHONE);
         await client.sendMessage(
             OWNER_PHONE,
             `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
