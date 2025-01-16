@@ -58,6 +58,7 @@ const {
 const { it } = require('date-fns/locale');
 const os = require('os');
 
+
 // Variabili d'ambiente
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -462,7 +463,12 @@ client.on('message', async (message) => {
     const chatId = message.from;
     const userResponse = message.body.trim().toLowerCase(); // Confronto case-insensitive
 
-    // Se l'utente è disimpegnato
+    // Funzione per rimuovere accenti e normalizzare il testo
+    function removeAccents(str) {
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    }
+
+   // Controlla se l'utente è nella lista di utenti disimpegnati
     if (disengagedUsers.has(chatId)) {
         if (userResponse === 'prenotazione') {
             // Rimuovi utente dai disimpegnati e reimposta stato
@@ -501,78 +507,68 @@ client.on('message', async (message) => {
                     userState.data = { discipline: disciplines[disciplineIndex] };
                     userState.step = 'ask_day_time';
 
-                    const dayTimeOptions = Object.entries(schedule)
-                        .filter(([day, slots]) =>
-                            slots.some(slot => slot.lessonType === userState.data.discipline)
-                        )
-                        .map(([day, slots]) => {
-                            const times = slots
-                                .filter(slot => slot.lessonType === userState.data.discipline)
-                                .map(slot => slot.time)
-                                .join(', ');
-                            return `${day}: ${times}`;
-                        })
-                        .join('\n');
+                     // Mostra i giorni e gli orari disponibili
+                     const dayTimeOptions = Object.entries(schedule)
+                    .filter(([day, slots]) => slots.some(slot => slot.lessonType === userState.data.discipline))
+                    .map(([day, slots]) => {
+                        const times = slots
+                            .filter(slot => slot.lessonType === userState.data.discipline)
+                            .map(slot => slot.time)
+                            .join(', ');
+                        return `${day}: ${times}`;
+                    }).join('\n');
 
-                    await message.reply(
-                        `Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`
-                    );
-                } else {
-                    await message.reply('Disciplina non valida. Riprova con un numero valido.');
-                }
+                await message.reply(`Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`);
+            } else {
+                await message.reply('Disciplina non valida. Riprova con un numero valido.');
+            }
+            break;
+        }
+
+        case 'ask_day_time': {
+            const userInput = userResponse.split(' ').map(s => s.trim());
+            let [day, time] = userInput;
+
+            // Normalizza il giorno usando removeAccents
+            day = removeAccents(day);
+
+            // Verifica se il giorno esiste nello schedule
+            const scheduleDay = Object.keys(schedule).find(
+                key => removeAccents(key) === day
+            );
+
+            if (!scheduleDay) {
+                await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
                 break;
             }
 
-            case 'ask_day_time': {
-                const userInput = userResponse.split(' ').map(s => s.trim().toLowerCase());
-                if (userInput.length < 2) {
-                    await message.reply(
-                        'Per favore, inserisci sia il giorno che l\'orario nel formato: "giorno orario" (ad esempio: "lunedì 09:30").'
-                    );
-                    break;
-                }
-            
-                const [day, time] = userInput;
-                // Normalizza il giorno dell'utente e i giorni del schedule
-                const normalizedDay = removeAccents(day); // Rimuove accenti dall'input dell'utente
-                const scheduleDays = Object.keys(schedule).map(removeAccents); // Rimuove accenti dai giorni dello schedule
-            
-                // Controlla se il giorno esiste nello schedule
-                const dayIndex = schedule[day].indexOf(normalizedDay);;
-                if (dayIndex === -1) {
-                    await message.reply(
-                        'Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).'
-                    );
-                    break;
-                }
-                // Recupera il giorno originale dallo schedule
-                const scheduleDay = Object.keys(schedule)[dayIndex];
-                // Filtra gli orari disponibili per la disciplina scelta
-                const availableTimes = schedule[scheduleDay]
-                    .filter(slot => slot.lessonType === userState.data.discipline)
-                    .map(slot => slot.time);
-            
-                if (!availableTimes.length) {
-                    await message.reply(
-                        `Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`
-                    );
-                    break;
-                }
-            
-                // Orario valido
-                const selectedSlot = schedule[scheduleDay].find(
-                    slot => slot.lessonType === userState.data.discipline && slot.time === time
-                );
-                userState.data.day = scheduleDay;
-                userState.data.time = time;
-                userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
-                userState.step = 'ask_date';
+            // Filtra gli orari disponibili per la disciplina scelta
+            const availableTimes = schedule[scheduleDay]
+                .filter(slot => slot.lessonType === userState.data.discipline)
+                .map(slot => slot.time);
 
-                await message.reply(
-                    `Hai scelto ${userState.data.discipline} il ${scheduleDay} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`
-                );
-                 break;
+            if (!availableTimes.includes(time)) {
+                // Costruisce un messaggio valido anche se `availableTimes` è vuoto
+                const timesList = availableTimes.length
+                    ? availableTimes.join(', ')
+                    : 'Nessun orario disponibile';
+
+                await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${scheduleDay}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`);
+                break;
             }
+
+            // Orario valido
+            const selectedSlot = schedule[scheduleDay].find(
+                slot => slot.lessonType === userState.data.discipline && slot.time === time
+            );
+            userState.data.day = scheduleDay;
+            userState.data.time = time;
+            userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
+            userState.step = 'ask_date';
+
+            await message.reply(`Hai scelto ${userState.data.discipline} il ${scheduleDay} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
+            break;
+        }
             
 
             case 'ask_date': {
@@ -658,23 +654,17 @@ client.on('message', async (message) => {
 
             default:
                 await message.reply('Errore sconosciuto. Riprova.');
-                delete userStates[chatId];
+                delete userStates[chatId];  // Reset dello stato per prevenire loop infiniti
                 break;
         }
     } catch (error) {
         console.error(`Errore generale: ${error.message}`);
         await message.reply('Si è verificato un errore. Per favore, riprova più tardi.');
-        delete userStates[chatId];
+        delete userStates[chatId]; 
     }
 });
 
-// Funzione per rimuovere accenti
-function removeAccents(str) {
-    return str
-        .normalize("NFD") // Decompone caratteri con accenti
-        .replace(/[\u0300-\u036f]/g, "") // Rimuove i segni diacritici
-        .toLowerCase(); // Converte in minuscolo
-}
+
 
 // Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato usando una transazione
 async function updateAvailableSlots(date, time) {
