@@ -748,4 +748,8 @@ app.listen(process.env.PORT || 10000, async () => {
     await populateCalendarWithValidation();
     await migrateRemainingSeats();
 });
-client.initialize();
+async function startBot() {
+    await client.initialize();
+    console.log('Bot avviato!');
+}
+startBot().catch(console.error);
