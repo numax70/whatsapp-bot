@@ -475,9 +475,19 @@ client.on('message', async (message) => {
             disengagedUsers.delete(chatId);
             userStates[chatId] = { step: 'ask_discipline' };
             const disciplines = getAvailableDisciplines(schedule);
+            // Invia logo di benvenuto
+            const logoPath = path.join(__dirname, 'logo.png'); // Assicurati che 'logo.png' sia nella directory
+            if (fs.existsSync(logoPath)) {
+                await client.sendMessage(chatId, {
+                    body: '',
+                    media: MessageMedia.fromFilePath(logoPath),
+                });
+            }
+            // Messaggio di benvenuto con informazioni
             await message.reply(
-                `Ecco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
+                `Benvenuto! 😊\n*Spazio Lotus*\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n 📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n\nSono qui per aiutarti con la prenotazione delle lezioni.\nEcco le discipline disponibili:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
             );
+            
         } else {
             await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
         }
@@ -487,6 +497,8 @@ client.on('message', async (message) => {
     // Se l'utente non ha uno stato attivo, inizializza
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_discipline' };
+        // Messaggio di benvenuto
+        await message.reply('Benvenuto! 😊 Sono qui per aiutarti con la prenotazione delle lezioni.');
         const disciplines = getAvailableDisciplines(schedule);
         await message.reply(
             `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
