@@ -748,15 +748,17 @@ async function startBot() {
                 if (client.info && client.info.wid) {
                     await client.sendMessage(OWNER_PHONE, logoMedia);
                     console.log('Logo inviato con successo a', OWNER_PHONE);
+                    // Invia un messaggio di stato dopo il logo
+                    await client.sendMessage(
+                         OWNER_PHONE,
+                         `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
+                    );
+                    console.log('Messaggio di stato inviato con successo!');
                 } else {
                     console.error('Il client non è completamente inizializzato.');
                 }    
-                // Invia un messaggio di stato dopo il logo
-                await client.sendMessage(
-                    OWNER_PHONE,
-                    `🎉 Il bot è attivo!\n📍 Sede di Catania: Via Carmelo Patanè Romeo, 28, Catania\n📍 Sede di Trecastagni(CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065\n`
-                );
-                console.log('Messaggio di stato inviato con successo!');
+                
+                
             } else {
                 console.error('Logo non trovato nel percorso:', logoPath);
             }
