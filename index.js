@@ -735,7 +735,7 @@ async function startBot() {
     client.on('ready', () =>
         console.log('Bot connesso a WhatsApp!'));
         const logoPath = path.join(__dirname, 'logo.png');
-
+        console.log('Percorso del logo:', logoPath); // Log del percorso del logo
         try {
             // Controlla se il file logo esiste
             if (fs.existsSync(logoPath)) {
@@ -745,9 +745,12 @@ async function startBot() {
                 const logoMedia = MessageMedia.fromFilePath(logoPath);
     
                 // Invia il logo al numero di telefono dell'owner
-                await client.sendMessage(OWNER_PHONE, logoMedia);
-                console.log('Logo inviato con successo a', OWNER_PHONE);
-    
+                if (client.info && client.info.wid) {
+                    await client.sendMessage(OWNER_PHONE, logoMedia);
+                    console.log('Logo inviato con successo a', OWNER_PHONE);
+                } else {
+                    console.error('Il client non è completamente inizializzato.');
+                }    
                 // Invia un messaggio di stato dopo il logo
                 await client.sendMessage(
                     OWNER_PHONE,
