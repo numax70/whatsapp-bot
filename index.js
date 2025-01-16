@@ -465,10 +465,13 @@ client.on('message', async (message) => {
     // Se l'utente è disimpegnato
     if (disengagedUsers.has(chatId)) {
         if (userResponse === 'prenotazione') {
+            // Rimuovi utente dai disimpegnati e reimposta stato
             disengagedUsers.delete(chatId);
-            userStates[chatId] = { step: 'ask_discipline' }; // Riparte con la richiesta della disciplina
+            userStates[chatId] = { step: 'ask_discipline' };
             const disciplines = getAvailableDisciplines(schedule);
-            await message.reply(`Ecco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
+            await message.reply(
+                `Ecco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
+            );
         } else {
             await message.reply('Scrivi "prenotazione" per avviare una nuova prenotazione.');
         }
@@ -479,214 +482,207 @@ client.on('message', async (message) => {
     if (!userStates[chatId]) {
         userStates[chatId] = { step: 'ask_discipline' };
         const disciplines = getAvailableDisciplines(schedule);
-        await message.reply(`Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`);
+        await message.reply(
+            `Vuoi prenotare una lezione?\nEcco le discipline disponibili da Spazio Lotus:\n${disciplines.map((d, i) => `${i + 1}) ${d}`).join('\n')}\nScegli la disciplina, digita il numero.`
+        );
         return;
     }
 
     const userState = userStates[chatId];
 
     // Gestione del flusso
-    switch (userState.step) {
-        case 'ask_discipline': {
-            const disciplines = getAvailableDisciplines(schedule);
-            const disciplineIndex = parseInt(userResponse, 10) - 1;
+    try {
+        switch (userState.step) {
+            case 'ask_discipline': {
+                const disciplines = getAvailableDisciplines(schedule);
+                const disciplineIndex = parseInt(userResponse, 10) - 1;
 
-            if (disciplines[disciplineIndex]) {
-                userState.data = { discipline: disciplines[disciplineIndex] };
-                userState.step = 'ask_day_time';
+                if (disciplines[disciplineIndex]) {
+                    userState.data = { discipline: disciplines[disciplineIndex] };
+                    userState.step = 'ask_day_time';
 
-                // Mostra i giorni e gli orari disponibili
-                const dayTimeOptions = Object.entries(schedule)
-                    .filter(([day, slots]) => slots.some(slot => slot.lessonType === userState.data.discipline))
-                    .map(([day, slots]) => {
-                        const times = slots
-                            .filter(slot => slot.lessonType === userState.data.discipline)
-                            .map(slot => slot.time)
-                            .join(', ');
-                        return `${day}: ${times}`;
-                    }).join('\n');
+                    const dayTimeOptions = Object.entries(schedule)
+                        .filter(([day, slots]) =>
+                            slots.some(slot => slot.lessonType === userState.data.discipline)
+                        )
+                        .map(([day, slots]) => {
+                            const times = slots
+                                .filter(slot => slot.lessonType === userState.data.discipline)
+                                .map(slot => slot.time)
+                                .join(', ');
+                            return `${day}: ${times}`;
+                        })
+                        .join('\n');
 
-                await message.reply(`Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`);
-            } else {
-                await message.reply('Disciplina non valida. Riprova con un numero valido.');
-            }
-            break;
-        }
-
-        case 'ask_day_time': {
-            const userInput = userResponse.split(' ').map(s => s.trim().toLowerCase());
-            if (userInput.length < 2) {
-                await message.reply('Per favore, inserisci sia il giorno che l\'orario nel formato: "giorno orario" (ad esempio: "lunedì 09:30").');
+                    await message.reply(
+                        `Per ${userState.data.discipline}, sono disponibili i seguenti giorni e orari:\n${dayTimeOptions}\nScrivi il giorno (es: lunedì) e l'orario (es: 09:30) per continuare.`
+                    );
+                } else {
+                    await message.reply('Disciplina non valida. Riprova con un numero valido.');
+                }
                 break;
             }
-        
-            const [day, time] = userInput;
-        
-            // Controlla se il giorno esiste nello schedule
-            const daySlots = schedule[day];
-            if (!daySlots) {
-                await message.reply('Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).');
-                break;
-            }
-        
-            // Filtra gli orari disponibili per la disciplina scelta
-            const availableTimes = daySlots
-                .filter(slot => slot.lessonType === userState.data.discipline)
-                .map(slot => slot.time);
-        
-            if (availableTimes.length === 0) {
-                // Nessun orario disponibile per la disciplina scelta nel giorno selezionato
-                await message.reply(`Non ci sono orari disponibili per ${userState.data.discipline} il ${day}. Prova con un altro giorno.`);
-                break;
-            }
-        
-            // Verifica se l'orario è valido
-            if (availableTimes.includes(time)) {
-                // Orario valido
-                const selectedSlot = daySlots.find(slot => slot.lessonType === userState.data.discipline && slot.time === time);
-                userState.data.day = day;
-                userState.data.time = time;
-                userState.data.lessonType = selectedSlot.lessonType; // Assicurati che lessonType venga salvato
-                userState.step = 'ask_date';
-                await message.reply(`Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`);
-            } else {
-                // Orario non valido, ripropone gli orari disponibili
-                const timesList = availableTimes.join(', ');
-                await message.reply(`L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`);
-            }
-            break;
-        }
-        
 
-        case 'ask_date': {
-            const validationResult = validateAndFormatDate(
-                userResponse,
-                schedule, // Passa il calendario
-                userState.data.discipline, // Disciplina selezionata
-                userState.data.time // Orario selezionato
-            );
-        
-            if (!validationResult.isValid) {
-                // Messaggio di errore specifico basato sulla validazione
-                await message.reply(validationResult.message);
-            } else {
-                // La data è valida
-                userState.data.date = validationResult.date;
-                userState.step = 'ask_name';
-                await message.reply(`La data scelta è ${validationResult.date}. Procediamo! Inserisci il tuo nome:`);
-            }
-            break;
-        }
-        
-        
-               
-
-        case 'ask_name': {
-            if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il nome contenga solo lettere
-                userState.data.name = userResponse.trim(); // Salva il nome
-                userState.step = 'ask_surname'; // Passa alla richiesta del cognome
-                await message.reply('Perfetto! Ora inserisci il tuo cognome:');
-            } else {
-                await message.reply('Per favore, inserisci un nome valido composto solo da lettere.');
-            }
-            break;
-        }
-
-        case 'ask_surname': {
-            if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) { // Verifica che il cognome contenga solo lettere
-                userState.data.surname = userResponse.trim(); // Salva il cognome
-                userState.step = 'ask_phone'; // Passa alla richiesta del numero di telefono
-                await message.reply('Inserisci il tuo numero di telefono:');
-            } else {
-                await message.reply('Per favore, inserisci un cognome valido composto solo da lettere.');
-            }
-            break;
-        }
-
-        case 'ask_phone': {
-            // Validazione del numero di telefono
-            const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
-            
-            if (!isValidPhoneNumber) {
-                // Se il numero non è valido, chiedi di nuovo
-                await message.reply('Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).');
-                break; // Resta nello stato 'ask_phone'
-            }
-        
-            // Salva il numero di telefono
-            userState.data.phone = userResponse.trim();
-        
-            // Verifica che tutti i dettagli della prenotazione siano presenti
-            if (!userState.data.date || !userState.data.time || !userState.data.lessonType) {
-                // Questo è un errore di stato: alcuni dati mancanti
-                console.error('Errore: Dettagli incompleti per la prenotazione:', userState.data);
-                await message.reply('Si è verificato un errore interno. Riprova a iniziare la prenotazione.');
-                delete userStates[chatId]; // Reset dello stato dell'utente
-                break;
-            }
-        
-            try {
-                // Aggiorna lo slot nel database
-                const result = await updateAvailableSlots(
-                    userState.data.date,
-                    userState.data.time
-                );
-        
-                if (!result.success) {
-                    // Se non ci sono più posti disponibili
-                    await message.reply('Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.');
-                    userState.step = 'ask_day_time'; // Torna alla selezione del giorno e dell'orario
+            case 'ask_day_time': {
+                const userInput = userResponse.split(' ').map(s => s.trim().toLowerCase());
+                if (userInput.length < 2) {
+                    await message.reply(
+                        'Per favore, inserisci sia il giorno che l\'orario nel formato: "giorno orario" (ad esempio: "lunedì 09:30").'
+                    );
                     break;
                 }
-        
-                // Invia riepilogo e completa la prenotazione
-                await sendWhatsAppNotification(client, chatId, userState.data);
-                await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
-                await sendEmailNotification(userState.data);
-        
-                await message.reply('Prenotazione completata con successo! ✅');
-            } catch (error) {
-                console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
-                await message.reply('Si è verificato un errore durante la prenotazione. Riprova più tardi.');
-            }
-        
-            // Reset dello stato dell'utente
-            delete userStates[chatId];
-            break;
-        }
-       
-        
 
-        default:
-            await message.reply('Errore sconosciuto. Riprova.');
-            delete userStates[chatId]; // Reset dello stato per prevenire loop infiniti
-            break;
+                const [day, time] = userInput;
+
+                const daySlots = schedule[day];
+                if (!daySlots) {
+                    await message.reply(
+                        'Il giorno inserito non è valido. Riprova con uno dei giorni disponibili (ad esempio: lunedì, martedì, ...).'
+                    );
+                    break;
+                }
+
+                const availableTimes = daySlots
+                    .filter(slot => slot.lessonType === userState.data.discipline)
+                    .map(slot => slot.time);
+
+                if (!availableTimes.includes(time)) {
+                    const timesList = availableTimes.join(', ');
+                    await message.reply(
+                        `L'orario inserito non è valido per ${userState.data.discipline} il ${day}. Gli orari disponibili sono: ${timesList}. Riprova scegliendo un orario valido.`
+                    );
+                    break;
+                }
+
+                const selectedSlot = daySlots.find(
+                    slot => slot.lessonType === userState.data.discipline && slot.time === time
+                );
+                userState.data.day = day;
+                userState.data.time = time;
+                userState.data.lessonType = selectedSlot.lessonType;
+                userState.step = 'ask_date';
+
+                await message.reply(
+                    `Hai scelto ${userState.data.discipline} il ${day} alle ${time}. Inserisci una data valida (formato: GG/MM/YYYY):`
+                );
+                break;
+            }
+
+            case 'ask_date': {
+                const validationResult = validateAndFormatDate(
+                    userResponse,
+                    schedule,
+                    userState.data.discipline,
+                    userState.data.time
+                );
+
+                if (!validationResult.isValid) {
+                    await message.reply(validationResult.message);
+                } else {
+                    userState.data.date = validationResult.date;
+                    userState.step = 'ask_name';
+                    await message.reply(`La data scelta è ${validationResult.date}. Procediamo! Inserisci il tuo nome:`);
+                }
+                break;
+            }
+
+            case 'ask_name': {
+                if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
+                    userState.data.name = userResponse.trim();
+                    userState.step = 'ask_surname';
+                    await message.reply('Perfetto! Ora inserisci il tuo cognome:');
+                } else {
+                    await message.reply('Per favore, inserisci un nome valido composto solo da lettere.');
+                }
+                break;
+            }
+
+            case 'ask_surname': {
+                if (/^[a-zA-Z\s]+$/.test(userResponse.trim())) {
+                    userState.data.surname = userResponse.trim();
+                    userState.step = 'ask_phone';
+                    await message.reply('Inserisci il tuo numero di telefono:');
+                } else {
+                    await message.reply('Per favore, inserisci un cognome valido composto solo da lettere.');
+                }
+                break;
+            }
+
+            case 'ask_phone': {
+                const isValidPhoneNumber = /^\d{10,15}$/.test(userResponse.trim());
+                if (!isValidPhoneNumber) {
+                    await message.reply(
+                        'Per favore, inserisci un numero di telefono valido (es. 1234567890, tra 10 e 15 cifre).'
+                    );
+                    break;
+                }
+
+                userState.data.phone = userResponse.trim();
+
+                try {
+                    const result = await updateAvailableSlots(
+                        userState.data.date,
+                        userState.data.time
+                    );
+
+                    if (!result.success) {
+                        await message.reply(
+                            'Non ci sono più posti disponibili per questo orario. Torna a scegliere un altro orario valido.'
+                        );
+                        userState.step = 'ask_day_time';
+                        break;
+                    }
+
+                    await sendWhatsAppNotification(client, chatId, userState.data);
+                    await sendWhatsAppNotification(client, OWNER_PHONE, userState.data);
+                    await sendEmailNotification(userState.data);
+
+                    await message.reply('Prenotazione completata con successo! ✅');
+                } catch (error) {
+                    console.error(`Errore durante la gestione della prenotazione: ${error.message}`);
+                    await message.reply(
+                        'Si è verificato un errore durante la prenotazione. Riprova più tardi.'
+                    );
+                }
+
+                delete userStates[chatId];
+                break;
+            }
+
+            default:
+                await message.reply('Errore sconosciuto. Riprova.');
+                delete userStates[chatId];
+                break;
+        }
+    } catch (error) {
+        console.error(`Errore generale: ${error.message}`);
+        await message.reply('Si è verificato un errore. Per favore, riprova più tardi.');
+        delete userStates[chatId];
     }
 });
 
 
-// Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato
+
+// Funzione per aggiornare gli slot disponibili rimuovendo quello prenotato usando una transazione
 async function updateAvailableSlots(date, time) {
+    const ref = db.ref(`calendario/${date}`);
     try {
-        const ref = db.ref(`calendario/${date}`);
-        const snapshot = await ref.once('value');
-        const slots = snapshot.val();
-
-        if (!slots) {
-            return { success: false, message: 'Non ci sono slot disponibili per questa data.' };
-        }
-
-        const updatedSlots = slots.map((slot) => {
-            if (slot.time === time) {
-                if (!slot.remainingSeats || slot.remainingSeats <= 0) {
-                    return { ...slot, remainingSeats: 0 }; // Prevenzione contro valori negativi
+        const transactionResult = await ref.transaction((slots) => {
+            if (!slots) return null; // Se non ci sono slot, ritorna null
+            return slots.map((slot) => {
+                if (slot.time === time) {
+                    if (!slot.remainingSeats || slot.remainingSeats <= 0) {
+                        throw new Error('Non ci sono più posti disponibili per questo orario.');
+                    }
+                    return { ...slot, remainingSeats: slot.remainingSeats - 1 };
                 }
-                return { ...slot, remainingSeats: slot.remainingSeats - 1 };
-            }
-            return slot;
+                return slot;
+            });
         });
 
-        await ref.set(updatedSlots); // Aggiorna il database
+        if (!transactionResult.committed) {
+            return { success: false, message: 'Un altro utente ha prenotato questo slot. Prova con un altro orario.' };
+        }
         return { success: true };
     } catch (error) {
         console.error(`Errore durante l'aggiornamento degli slot per ${date}:`, error.message);
