@@ -472,10 +472,11 @@ async function startBot() {
          // Funzione per inviare il logo
          async function sendLogo(client, recipient) {
             const logoPath = path.join(__dirname, 'logo.png');
+            console.log('Percorso assoluto del logo:', logoPath); // Log del percorso
             try {
                 if (fs.existsSync(logoPath)) {
-                    const logoBase64 = fs.readFileSync(logoPath, { encoding: 'base64' });
-                    const logoMedia = new MessageMedia('image/png', logoBase64, 'logo.png');
+                    // Creazione del media dal file direttamente
+                    const logoMedia = MessageMedia.fromFilePath(logoPath);
                     await client.sendMessage(recipient, logoMedia);
                     console.log(`Logo inviato con successo a ${recipient}!`);
                 } else {
