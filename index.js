@@ -481,7 +481,9 @@ async function startBot() {
                     console.log('Logo trovato, pronto per invio.');
                     // Creazione del media dal file direttamente
                     const logoMedia = MessageMedia.fromFilePath(logoPath);
+                    console.log('Oggetto MessageMedia creato:', logoMedia);
                     await client.sendMessage(recipient, logoMedia);
+                    console.log('Logo inviato con successo a', OWNER_PHONE);
                     console.log(`Logo inviato con successo a ${recipient}!`);
                 } else {
                     console.error('Logo non trovato:', logoPath);
