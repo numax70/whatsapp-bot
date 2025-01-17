@@ -63,7 +63,7 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://your-firebase-url.firebaseio.com',
+        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
