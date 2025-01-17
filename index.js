@@ -60,6 +60,8 @@ const schedule = {
 
 const alternativeNames = {
     "matwork": "PILATES MATWORK",
+    "barre": "PILATES DANCE BARRE",
+    "Barre": "PILATES DANCE BARRE",
     "exo chair": "PILATES EXO CHAIR",
     "exo": "PILATES EXO CHAIR",
     "chair": "PILATES EXO CHAIR",
@@ -269,18 +271,29 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                         userState.step = 'ask_details';
                         break;
                     }
+                    // Messaggio di conferma prenotazione
+                     await message.reply('Prenotazione completata con successo! ✅');
 
-                    await sendEmailNotification(userState.data);
+                    // Invio riepilogo al cliente
+                    await client.sendMessage(chatId, `📋 *Riepilogo Prenotazione*:
+                        - Disciplina: ${userState.data.discipline}
+                        - Giorno: ${userState.data.day}
+                        - Orario: ${userState.data.time}
+                        - Data: ${userState.data.date}
+                        - Nome: ${userState.data.name}
+                        - Cognome: ${userState.data.surname}
+                        - Telefono: ${userState.data.phone}`);
+                    
                     await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
-- Nome: ${userState.data.name}
-- Cognome: ${userState.data.surname}
-- Telefono: ${userState.data.phone}
-- Disciplina: ${userState.data.discipline}
-- Giorno: ${userState.data.day}
-- Orario: ${userState.data.time}
-- Data: ${userState.data.date}`);
-
-                    await message.reply('Prenotazione completata con successo! ✅');
+                    - Nome: ${userState.data.name}
+                    - Cognome: ${userState.data.surname}
+                    - Telefono: ${userState.data.phone}
+                    - Disciplina: ${userState.data.discipline}
+                    - Giorno: ${userState.data.day}
+                    - Orario: ${userState.data.time}
+                    - Data: ${userState.data.date}`);
+                    await sendEmailNotification(userState.data);   
+                    
                     delete userStates[chatId];
                 } else {
                     await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
@@ -434,7 +447,7 @@ async function updateAvailableSlots(date, time) {
 
 function normalizeDiscipline(input) {
     const normalizedInput = input.trim().toLowerCase();
-    return alternativeNames[normalizedInput] || input;
+    return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
 }
 
 function validateAndFormatDate(input, schedule, discipline, time) {
