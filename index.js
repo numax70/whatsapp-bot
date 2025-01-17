@@ -8,7 +8,7 @@ const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
 const os = require('os');
-const { parse, isValid, format } = require('date-fns');
+const { parse, isValid, format, addDays } = require('date-fns');
 const { it } = require('date-fns/locale');
 
 const schedule = {
@@ -50,7 +50,6 @@ const schedule = {
         { "time": "19:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
     ]
 };
-
 const alternativeNames = {
     "matwork": "PILATES MATWORK",
     "exo chair": "PILATES EXO CHAIR",
@@ -119,110 +118,54 @@ async function sendEmailNotification(data) {
     }
 }
 
+async function populateDatabase() {
+    const today = new Date();
+    const endDate = addDays(today, 7); // Riempie per una settimana
+
+    for (let d = today; d <= endDate; d = addDays(d, 1)) {
+        const dayName = format(d, 'EEEE', { locale: it }).toLowerCase();
+        const formattedDate = format(d, 'yyyy-MM-dd');
+
+        if (schedule[dayName]) {
+            const daySchedule = schedule[dayName];
+            const ref = db.ref(`calendario/${formattedDate}`);
+            const snapshot = await ref.once('value');
+
+            if (!snapshot.exists()) {
+                await ref.set(daySchedule);
+                console.log(`Aggiunto calendario per ${formattedDate}`);
+            }
+        }
+    }
+}
+
+async function resetSlots() {
+    const yesterday = addDays(new Date(), -1);
+    const formattedDate = format(yesterday, 'yyyy-MM-dd');
+
+    const ref = db.ref(`calendario/${formattedDate}`);
+    const snapshot = await ref.once('value');
+
+    if (snapshot.exists()) {
+        const slots = snapshot.val();
+        const resetSlots = slots.map(slot => ({
+            ...slot,
+            remainingSeats: 10
+        }));
+
+        await ref.set(resetSlots);
+        console.log(`Ripristinati slot per ${formattedDate}`);
+    }
+}
+
 async function startBot() {
     const client = new Client({ authStrategy: new LocalAuth() });
-    let currentOwnerPhone = OWNER_PHONE;
 
-    async function sendWelcomeMessage(client, recipient) {
-        const logoPath = path.join(__dirname, 'logo.jpg');
-        const tableImagePath = path.join(__dirname, 'tabella.jpg');
-        try {
-            if (fs.existsSync(logoPath)) {
-                const logoMedia = MessageMedia.fromFilePath(logoPath);
-                await client.sendMessage(recipient, logoMedia);
-            }
-            await client.sendMessage(
-                recipient,
-                `🎉 Benvenuto su Spazio Lotus!
-                📍 Sedi:
-                - Catania: Via Carmelo Patanè Romeo, 28
-                - Trecastagni (CT): Via Luigi Capuana, 51
-                📞 Telefono: +39 349 289 0065`
-            );
-            if (fs.existsSync(tableImagePath)) {
-                const tableMedia = MessageMedia.fromFilePath(tableImagePath);
-                await client.sendMessage(recipient, tableMedia);
-            }
-            await client.sendMessage(
-                recipient,
-                `Vuoi prenotare una lezione?
-                Ecco le discipline disponibili:
-                ${getAvailableDisciplines(schedule).join(', ')}.
+    await populateDatabase(); // Riempie il database con il calendario
 
-                Scrivi il tuo messaggio seguendo questo formato:
-                *disciplina, giorno, orario, data*
-
-                Esempio:
-                matwork, lunedì, 09:30, 26 gennaio`
-            );
-        } catch (error) {
-            console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
-        }
-    }
-
-    function normalizeDiscipline(input) {
-        const normalizedInput = input.trim().toLowerCase();
-        return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
-    }
-
-    function validateAndFormatDate(input, schedule, discipline, time) {
-        if (!input) {
-            return { isValid: false, message: 'La data non è valida. Usa il formato "26 gennaio".' };
-        }
-
-        const today = new Date();
-        const year = today.getFullYear();
-
-        let parsedDate;
-        try {
-            parsedDate = parse(`${input} ${year}`, 'd MMMM yyyy', today, { locale: it });
-        } catch (error) {
-            return { isValid: false, message: 'Errore nella decodifica della data. Usa il formato "26 gennaio".' };
-        }
-
-        if (!isValid(parsedDate) || parsedDate < today) {
-            return { isValid: false, message: 'Inserisci una data valida e futura.' };
-        }
-
-        const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-        if (!schedule[inputDay]) {
-            return { isValid: false, message: `Non ci sono lezioni il giorno ${inputDay}.` };
-        }
-
-        const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
-        if (!slot) {
-            return { isValid: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
-        }
-
-        return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
-    }
-
-    function getAvailableDisciplines(schedule) {
-        return [...new Set(Object.values(schedule).flatMap(day => day.map(slot => slot.lessonType)))];
-    }
-
-    async function updateAvailableSlots(date, time) {
-        const ref = db.ref(`calendario/${date}`);
-        try {
-            const transactionResult = await ref.transaction(slots => {
-                if (!slots) return null;
-                return slots.map(slot => {
-                    if (slot.time === time) {
-                        if (slot.remainingSeats <= 0) throw new Error('Nessun posto disponibile.');
-                        return { ...slot, remainingSeats: slot.remainingSeats - 1 };
-                    }
-                    return slot;
-                });
-            });
-            if (!transactionResult.committed) {
-                return { success: false };
-            }
-            return { success: true };
-        } catch (error) {
-            console.error(error.message);
-            return { success: false };
-        }
-    }
+    setInterval(async () => {
+        await resetSlots(); // Ripristina slot ogni giorno
+    }, 24 * 60 * 60 * 1000); // Ogni 24 ore
 
     client.on('message', async message => {
         const chatId = message.from;
@@ -242,7 +185,7 @@ async function startBot() {
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio'); 
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
@@ -261,14 +204,14 @@ async function startBot() {
 
                 userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
                 userState.step = 'ask_user_info';
-                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero di telefono* Esempio: Mario,Rossi,3479056597');
+                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
                 break;
 
             case 'ask_user_info':
                 const [name, surname, phone] = userResponse.split(',').map(s => s.trim());
 
                 if (!name || !surname || !phone) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero di telefono* Esempio: Mario,Rossi,3479056597');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
                     break;
                 }
 
@@ -293,15 +236,15 @@ async function startBot() {
 
                 userState.step = 'confirm_booking';
                 await message.reply(`Ecco il riepilogo della tua prenotazione:
-- Disciplina: ${userState.data.discipline}
-- Giorno: ${userState.data.day}
-- Orario: ${userState.data.time}
-- Data: ${userState.data.date}
-- Nome: ${userState.data.name}
-- Cognome: ${userState.data.surname}
-- Telefono: ${userState.data.phone}
+				- Disciplina: ${userState.data.discipline}
+				- Giorno: ${userState.data.day}
+				- Orario: ${userState.data.time}
+				- Data: ${userState.data.date}
+				- Nome: ${userState.data.name}
+				- Cognome: ${userState.data.surname}
+				- Telefono: ${userState.data.phone}
 
-Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
+				Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
             case 'confirm_booking':
@@ -318,13 +261,13 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
 
                     await sendEmailNotification(userState.data);
                     await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
-- Nome: ${userState.data.name}
-- Cognome: ${userState.data.surname}
-- Telefono: ${userState.data.phone}
-- Disciplina: ${userState.data.discipline}
-- Giorno: ${userState.data.day}
-- Orario: ${userState.data.time}
-- Data: ${userState.data.date}`);
+                    - Nome: ${userState.data.name}
+                    - Cognome: ${userState.data.surname}
+                    - Telefono: ${userState.data.phone}
+                    - Disciplina: ${userState.data.discipline}
+                    - Giorno: ${userState.data.day}
+                    - Orario: ${userState.data.time}
+                    - Data: ${userState.data.date}`);
 
                     await message.reply('Prenotazione completata con successo! ✅');
                     delete userStates[chatId];
@@ -374,6 +317,103 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
     app.listen(3000, () => {
         console.log('Server in ascolto sulla porta 3000');
     });
+}
+
+async function updateAvailableSlots(date, time) {
+    const ref = db.ref(`calendario/${date}`);
+    try {
+        const transactionResult = await ref.transaction(slots => {
+            if (!slots) return null;
+            return slots.map(slot => {
+                if (slot.time === time) {
+                    if (slot.remainingSeats <= 0) throw new Error('Nessun posto disponibile.');
+                    return { ...slot, remainingSeats: slot.remainingSeats - 1 };
+                }
+                return slot;
+            });
+        });
+        if (!transactionResult.committed) {
+            return { success: false };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(error.message);
+        return { success: false };
+    }
+}
+
+async function sendWelcomeMessage(client, recipient) {
+    const logoPath = path.join(__dirname, 'logo.jpg');
+    const tableImagePath = path.join(__dirname, 'tabella.jpg');
+    try {
+        if (fs.existsSync(logoPath)) {
+            const logoMedia = MessageMedia.fromFilePath(logoPath);
+            await client.sendMessage(recipient, logoMedia);
+        }
+        await client.sendMessage(
+            recipient,
+            `🎉 Benvenuto su Spazio Lotus!
+			📍 Sedi:
+			- Catania: Via Carmelo Patanè Romeo, 28
+			- Trecastagni (CT): Via Luigi Capuana, 51	
+			📞 Telefono: +39 349 289 0065`
+        );
+        if (fs.existsSync(tableImagePath)) {
+            const tableMedia = MessageMedia.fromFilePath(tableImagePath);
+            await client.sendMessage(recipient, tableMedia);
+        }
+        await client.sendMessage(
+            recipient,
+            `Vuoi prenotare una lezione?
+			Ecco le discipline disponibili:
+			${getAvailableDisciplines(schedule).join(', ')}.
+			Scrivi il tuo messaggio seguendo questo formato: *disciplina, giorno, orario, data*
+			Esempio: matwork, lunedì, 09:30, 26 gennaio`
+        );
+    } catch (error) {
+        console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
+    }
+}
+
+function normalizeDiscipline(input) {
+    const normalizedInput = input.trim().toLowerCase();
+    return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
+}
+
+function validateAndFormatDate(input, schedule, discipline, time) {
+    if (!input) {
+        return { isValid: false, message: 'La data non è valida. Usa il formato "26 gennaio".' };
+    }
+
+    const today = new Date();
+    const year = today.getFullYear();
+
+    let parsedDate;
+    try {
+        parsedDate = parse(`${input} ${year}`, 'd MMMM yyyy', today, { locale: it });
+    } catch (error) {
+        return { isValid: false, message: 'Errore nella decodifica della data. Usa il formato "26 gennaio".' };
+    }
+
+    if (!isValid(parsedDate) || parsedDate < today) {
+        return { isValid: false, message: 'Inserisci una data valida e futura.' };
+    }
+
+    const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+    if (!schedule[inputDay]) {
+        return { isValid: false, message: `Non ci sono lezioni il giorno ${inputDay}.` };
+    }
+
+    const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
+    if (!slot) {
+        return { isValid: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
+    }
+
+    return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
+}
+
+function getAvailableDisciplines(schedule) {
+    return [...new Set(Object.values(schedule).flatMap(day => day.map(slot => slot.lessonType)))];
 }
 
 startBot().catch(console.error);
