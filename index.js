@@ -74,7 +74,7 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://your-firebase-url.firebaseio.com',
+        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
@@ -84,7 +84,6 @@ try {
 
 const db = admin.database();
 const userStates = {};
-const disengagedUsers = new Set(); // Utenti disimpegnati
 
 // Configurazione email
 const transporter = nodemailer.createTransport({
@@ -98,11 +97,6 @@ const transporter = nodemailer.createTransport({
 async function startBot() {
     const client = new Client({ authStrategy: new LocalAuth() });
     let currentOwnerPhone = OWNER_PHONE;
-
-    function changeOwnerPhone(newPhone) {
-        console.log(`Cambio il numero del proprietario da ${currentOwnerPhone} a ${newPhone}`);
-        currentOwnerPhone = newPhone;
-    }
 
     async function sendWelcomeMessage(client, recipient) {
         const logoPath = path.join(__dirname, 'logo.jpg');
@@ -231,7 +225,7 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 const normalizedDiscipline = normalizeDiscipline(discipline);
 
                 if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
-                    await message.reply('Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
+                    await message.reply('Disciplina non valida. Riprova con una delle seguenti:' + getAvailableDisciplines(schedule).join(', '));
                     break;
                 }
 
@@ -242,79 +236,54 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 }
 
                 userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
-                userState.step = 'review_details';
-                await message.reply(`Ecco il riepilogo della tua prenotazione:
-Disciplina: ${normalizedDiscipline}
-Giorno: ${day}
-Orario: ${time}
-Data: ${validation.date}
-
-Vuoi modificare qualcosa? Rispondi con "Sì" o "No".`);
+                userState.step = 'ask_user_info';
+                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero*Esempio: Mario,Rossi,3479056597');
                 break;
 
-            case 'review_details':
-                if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
-                    userState.step = 'ask_modification';
-                    await message.reply('Cosa vuoi modificare? (Disciplina, Giorno, Orario, Data)');
-                } else if (userResponse.toLowerCase() === 'no') {
-                    userState.step = 'ask_name';
-                    await message.reply('Inserisci il tuo nome.');
-                } else {
-                    await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
-                }
-                break;
+            case 'ask_user_info':
+                const [name, surname, phone] = userResponse.split(',').map(s => s.trim());
 
-            case 'ask_modification':
-                if (userResponse.toLowerCase().includes('disciplina')) {
-                    userState.step = 'ask_details';
-                    await message.reply('Reinserisci la disciplina, il giorno, l\'orario e la data.');
-                } else if (userResponse.toLowerCase().includes('giorno')) {
-                    userState.step = 'ask_day';
-                    await message.reply('Inserisci il nuovo giorno.');
-                } else if (userResponse.toLowerCase().includes('orario')) {
-                    userState.step = 'ask_time';
-                    await message.reply('Inserisci il nuovo orario.');
-                } else if (userResponse.toLowerCase().includes('data')) {
-                    userState.step = 'ask_date';
-                    await message.reply('Inserisci la nuova data.');
-                } else {
-                    await message.reply('Non ho capito cosa vuoi modificare. Specifica Disciplina, Giorno, Orario o Data.');
-                }
-                break;
-
-            case 'ask_name':
-                if (!/^[a-zA-Z\s]+$/.test(userResponse)) {
-                    await message.reply('Nome non valido. Usa solo lettere.');
+                if (!name || !surname || !phone) {
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
                     break;
                 }
-                userState.data.name = userResponse;
-                userState.step = 'ask_surname';
-                await message.reply('Inserisci il tuo cognome.');
-                break;
 
-            case 'ask_surname':
-                if (!/^[a-zA-Z\s]+$/.test(userResponse)) {
-                    await message.reply('Cognome non valido. Usa solo lettere.');
+                if (!/^[a-zA-Z\s]+$/.test(name)) {
+                    await message.reply('Il nome può contenere solo lettere.');
                     break;
                 }
-                userState.data.surname = userResponse;
-                userState.step = 'ask_phone';
-                await message.reply('Inserisci il tuo numero di telefono.');
-                break;
 
-            case 'ask_phone':
-                if (!/^\d{10,15}$/.test(userResponse)) {
-                    await message.reply('Numero di telefono non valido.');
+                if (!/^[a-zA-Z\s]+$/.test(surname)) {
+                    await message.reply('Il cognome può contenere solo lettere.');
                     break;
                 }
-                userState.data.phone = userResponse;
+
+                if (!/^\d{10,15}$/.test(phone)) {
+                    await message.reply('Il numero di telefono deve contenere solo cifre e avere una lunghezza tra 10 e 15 cifre.');
+                    break;
+                }
+
+                userState.data.name = name;
+                userState.data.surname = surname;
+                userState.data.phone = phone;
+
                 const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                 if (!updateResult.success) {
                     await message.reply('Posti esauriti. Scegli un altro orario.');
                     userState.step = 'ask_details';
                     break;
                 }
-                await message.reply('Prenotazione completata! ✅');
+
+                await message.reply(`Prenotazione completata! ✅
+Riepilogo:
+- Disciplina: ${userState.data.discipline}
+- Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
+- Data: ${userState.data.date}
+- Nome: ${userState.data.name}
+- Cognome: ${userState.data.surname}
+- Telefono: ${userState.data.phone}`);
+
                 delete userStates[chatId];
                 break;
 
