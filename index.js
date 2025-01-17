@@ -94,6 +94,31 @@ const transporter = nodemailer.createTransport({
     },
 });
 
+async function sendEmailNotification(data) {
+    const emailBody = `Nuova prenotazione ricevuta:
+- Nome: ${data.name}
+- Cognome: ${data.surname}
+- Telefono: ${data.phone}
+- Disciplina: ${data.discipline}
+- Giorno: ${data.day}
+- Orario: ${data.time}
+- Data: ${data.date}`;
+
+    const mailOptions = {
+        from: EMAIL_USER,
+        to: 'siselcatania@gmail.com', // Sostituisci con l'email del proprietario
+        subject: 'Nuova Prenotazione Lezione',
+        text: emailBody,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log('Email inviata al proprietario.');
+    } catch (error) {
+        console.error('Errore nell\'invio dell\'email:', error.message);
+    }
+}
+
 async function startBot() {
     const client = new Client({ authStrategy: new LocalAuth() });
     let currentOwnerPhone = OWNER_PHONE;
@@ -109,10 +134,10 @@ async function startBot() {
             await client.sendMessage(
                 recipient,
                 `🎉 Benvenuto su Spazio Lotus!
-📍 Sedi:
-- Catania: Via Carmelo Patanè Romeo, 28
-- Trecastagni (CT): Via Luigi Capuana, 51
-📞 Telefono: +39 349 289 0065`
+                📍 Sedi:
+                - Catania: Via Carmelo Patanè Romeo, 28
+                - Trecastagni (CT): Via Luigi Capuana, 51
+                📞 Telefono: +39 349 289 0065`
             );
             if (fs.existsSync(tableImagePath)) {
                 const tableMedia = MessageMedia.fromFilePath(tableImagePath);
@@ -121,14 +146,14 @@ async function startBot() {
             await client.sendMessage(
                 recipient,
                 `Vuoi prenotare una lezione?
-Ecco le discipline disponibili:
-${getAvailableDisciplines(schedule).join(', ')}.
+                Ecco le discipline disponibili:
+                ${getAvailableDisciplines(schedule).join(', ')}.
 
-Scrivi il tuo messaggio seguendo questo formato:
-*disciplina, giorno, orario, data*
+                Scrivi il tuo messaggio seguendo questo formato:
+                *disciplina, giorno, orario, data*
 
-Esempio:
-PILATES MATWORK, lunedì, 09:30, 26 gennaio`
+                Esempio:
+                matwork, lunedì, 09:30, 26 gennaio`
             );
         } catch (error) {
             console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
@@ -148,7 +173,6 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
         const today = new Date();
         const year = today.getFullYear();
 
-        // Aggiungi l'anno corrente alla data fornita dall'utente
         let parsedDate;
         try {
             parsedDate = parse(`${input} ${year}`, 'd MMMM yyyy', today, { locale: it });
@@ -218,14 +242,14 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data*Esempio:PILATES MATWORK, lunedì, 09:30, 26 gennaio');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio'); 
                     break;
                 }
 
                 const normalizedDiscipline = normalizeDiscipline(discipline);
 
                 if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
-                    await message.reply('Disciplina non valida. Riprova con una delle seguenti:' + getAvailableDisciplines(schedule).join(', '));
+                    await message.reply('Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
                     break;
                 }
 
@@ -237,14 +261,14 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
 
                 userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
                 userState.step = 'ask_user_info';
-                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero*Esempio: Mario,Rossi,3479056597');
+                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero di telefono* Esempio: Mario,Rossi,3479056597');
                 break;
 
             case 'ask_user_info':
                 const [name, surname, phone] = userResponse.split(',').map(s => s.trim());
 
                 if (!name || !surname || !phone) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero di telefono* Esempio: Mario,Rossi,3479056597');
                     break;
                 }
 
@@ -267,24 +291,46 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 userState.data.surname = surname;
                 userState.data.phone = phone;
 
-                const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
-                if (!updateResult.success) {
-                    await message.reply('Posti esauriti. Scegli un altro orario.');
-                    userState.step = 'ask_details';
-                    break;
-                }
-
-                await message.reply(`Prenotazione completata! ✅
-Riepilogo:
+                userState.step = 'confirm_booking';
+                await message.reply(`Ecco il riepilogo della tua prenotazione:
 - Disciplina: ${userState.data.discipline}
 - Giorno: ${userState.data.day}
 - Orario: ${userState.data.time}
 - Data: ${userState.data.date}
 - Nome: ${userState.data.name}
 - Cognome: ${userState.data.surname}
-- Telefono: ${userState.data.phone}`);
+- Telefono: ${userState.data.phone}
 
-                delete userStates[chatId];
+Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
+                break;
+
+            case 'confirm_booking':
+                if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
+                    userState.step = 'ask_details';
+                    await message.reply('Reinserisci i dettagli della prenotazione nel formato: *disciplina, giorno, orario, data*.');
+                } else if (userResponse.toLowerCase() === 'no') {
+                    const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
+                    if (!updateResult.success) {
+                        await message.reply('Posti esauriti. Scegli un altro orario.');
+                        userState.step = 'ask_details';
+                        break;
+                    }
+
+                    await sendEmailNotification(userState.data);
+                    await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
+- Nome: ${userState.data.name}
+- Cognome: ${userState.data.surname}
+- Telefono: ${userState.data.phone}
+- Disciplina: ${userState.data.discipline}
+- Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
+- Data: ${userState.data.date}`);
+
+                    await message.reply('Prenotazione completata con successo! ✅');
+                    delete userStates[chatId];
+                } else {
+                    await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
+                }
                 break;
 
             default:
