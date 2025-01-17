@@ -181,11 +181,11 @@ async function startBot() {
         const chatId = message.from;
         const userResponse = message.body.trim();
 
+        //Controlla se l'utente è nuovo
         if (!userStates[chatId]) {
-            userStates[chatId] = { step: 'welcome' };
+            userStates[chatId] = { step: 'ask_details' }; // Avanza direttamente al menu
             await sendWelcomeMessage(client, chatId);
-            userStates[chatId].step = 'ask_details';
-            return;
+            return; // Interrompi qui, il menu è già stato mostrato
         }
 
         const userState = userStates[chatId];
@@ -199,6 +199,7 @@ async function startBot() {
                     break;
                 }
 
+                //Normalizza e valida
                 const normalizedDiscipline = normalizeDiscipline(discipline);
 
                 if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
@@ -482,6 +483,11 @@ async function sendWelcomeMessage(client, recipient) {
         await client.sendMessage(
             recipient,
             `🎉 Benvenuto su Spazio Lotus!\n📍 Sedi:\n- Catania: Via Carmelo Patanè Romeo, 28\n- Trecastagni (CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065`
+        );
+        const disciplines = getAvailableDisciplines(schedule).join(', ');
+        await client.sendMessage(
+            recipient,
+            `Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines}.\n\nScrivi il tuo messaggio seguendo questo formato:\n*disciplina, giorno, orario, data*\n\nEsempio:\nPmatwork, lunedì, 09:30, 26 gennaio`
         );
     } catch (error) {
         console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
