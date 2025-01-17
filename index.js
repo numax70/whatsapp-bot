@@ -8,7 +8,7 @@ const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
 const os = require('os');
-const { parse, isValid, format, setYear } = require('date-fns');
+const { parse, isValid, format } = require('date-fns');
 const { it } = require('date-fns/locale');
 
 const schedule = {
@@ -51,6 +51,15 @@ const schedule = {
     ]
 };
 
+const alternativeNames = {
+    "matwork": "PILATES MATWORK",
+    "exo chair": "PILATES EXO CHAIR",
+    "exo": "PILATES EXO CHAIR",
+    "chair": "PILATES EXO CHAIR",
+    "functional": "FUNCTIONAL TRAINER MOVEMENT",
+    "functional trainer": "FUNCTIONAL TRAINER MOVEMENT",
+    "functional trainer movement": "FUNCTIONAL TRAINER MOVEMENT"
+};
 
 // Variabili d'ambiente
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
@@ -65,7 +74,7 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
+        databaseURL: 'https://your-firebase-url.firebaseio.com',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
@@ -132,6 +141,11 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
         }
     }
 
+    function normalizeDiscipline(input) {
+        const normalizedInput = input.trim().toLowerCase();
+        return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
+    }
+
     function validateAndFormatDate(input, schedule, discipline, time) {
         if (!input) {
             return { isValid: false, message: 'La data non è valida. Usa il formato "26 gennaio".' };
@@ -157,7 +171,7 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
             return { isValid: false, message: `Non ci sono lezioni il giorno ${inputDay}.` };
         }
 
-        const slot = schedule[inputDay].find(s => s.lessonType === discipline && s.time === time);
+        const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
         if (!slot) {
             return { isValid: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
         }
@@ -210,24 +224,62 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: PILATES MATWORK, lunedì, 09:30, 26 gennaio');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data*Esempio:PILATES MATWORK, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
-                if (!getAvailableDisciplines(schedule).includes(discipline)) {
+                const normalizedDiscipline = normalizeDiscipline(discipline);
+
+                if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
                     await message.reply('Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
                     break;
                 }
 
-                const validation = validateAndFormatDate(date, schedule, discipline, time);
+                const validation = validateAndFormatDate(date, schedule, normalizedDiscipline, time);
                 if (!validation.isValid) {
                     await message.reply(validation.message);
                     break;
                 }
 
-                userState.data = { discipline, day, time, date: validation.date };
-                userState.step = 'ask_name';
-                await message.reply('Inserisci il tuo nome.');
+                userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
+                userState.step = 'review_details';
+                await message.reply(`Ecco il riepilogo della tua prenotazione:
+Disciplina: ${normalizedDiscipline}
+Giorno: ${day}
+Orario: ${time}
+Data: ${validation.date}
+
+Vuoi modificare qualcosa? Rispondi con "Sì" o "No".`);
+                break;
+
+            case 'review_details':
+                if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
+                    userState.step = 'ask_modification';
+                    await message.reply('Cosa vuoi modificare? (Disciplina, Giorno, Orario, Data)');
+                } else if (userResponse.toLowerCase() === 'no') {
+                    userState.step = 'ask_name';
+                    await message.reply('Inserisci il tuo nome.');
+                } else {
+                    await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
+                }
+                break;
+
+            case 'ask_modification':
+                if (userResponse.toLowerCase().includes('disciplina')) {
+                    userState.step = 'ask_details';
+                    await message.reply('Reinserisci la disciplina, il giorno, l\'orario e la data.');
+                } else if (userResponse.toLowerCase().includes('giorno')) {
+                    userState.step = 'ask_day';
+                    await message.reply('Inserisci il nuovo giorno.');
+                } else if (userResponse.toLowerCase().includes('orario')) {
+                    userState.step = 'ask_time';
+                    await message.reply('Inserisci il nuovo orario.');
+                } else if (userResponse.toLowerCase().includes('data')) {
+                    userState.step = 'ask_date';
+                    await message.reply('Inserisci la nuova data.');
+                } else {
+                    await message.reply('Non ho capito cosa vuoi modificare. Specifica Disciplina, Giorno, Orario o Data.');
+                }
                 break;
 
             case 'ask_name':
@@ -265,6 +317,10 @@ PILATES MATWORK, lunedì, 09:30, 26 gennaio`
                 await message.reply('Prenotazione completata! ✅');
                 delete userStates[chatId];
                 break;
+
+            default:
+                await message.reply('Si è verificato un errore. Riprova.');
+                delete userStates[chatId];
         }
     });
 
