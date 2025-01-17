@@ -248,16 +248,16 @@ async function startBot() {
                 userState.data.phone = phone;
 
                 userState.step = 'confirm_booking';
-                await message.reply(`Ecco il riepilogo  provvisorio della tua prenotazione:
-                - Disciplina: ${userState.data.discipline}
-                - Giorno: ${userState.data.day}
-                - Orario: ${userState.data.time}
-                - Data: ${userState.data.date}
-                - Nome: ${userState.data.name}
-                - Cognome: ${userState.data.surname}
-                - Telefono: ${userState.data.phone}
+                await message.reply(`Ecco il riepilogo della tua prenotazione:
+- Disciplina: ${userState.data.discipline}
+- Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
+- Data: ${userState.data.date}
+- Nome: ${userState.data.name}
+- Cognome: ${userState.data.surname}
+- Telefono: ${userState.data.phone}
 
-                Vuoi apportare modifiche ? Rispondi con "Sì" o "No".`);
+Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
             case 'confirm_booking':
@@ -275,19 +275,23 @@ async function startBot() {
                      await message.reply('Prenotazione completata con successo! ✅');
 
                     // Invio riepilogo al cliente
-                    const message = `
-                    📋 *Riepilogo Prenotazione*
-                    👤 Nome: ${userState.data.name}
-                    👥 Cognome: ${userState.data.surname}
-                    📞 Telefono: ${userState.data.phone}
-                    📅 Data: ${userState.data.date}
-                    ⏰ Ora: ${userState.data.time}
-                    📘 Lezione: ${userState.data.discipline}
-                    - Giorno: ${userState.data.day}
-                        `;
-                    await client.sendMessage(chatId, message);
+                    await client.sendMessage(chatId, `📋 *Riepilogo Prenotazione*:
+                        - Disciplina: ${userState.data.discipline}
+                        - Giorno: ${userState.data.day}
+                        - Orario: ${userState.data.time}
+                        - Data: ${userState.data.date}
+                        - Nome: ${userState.data.name}
+                        - Cognome: ${userState.data.surname}
+                        - Telefono: ${userState.data.phone}`);
                     
-                    await client.sendMessage(OWNER_PHONE, message);
+                    await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
+                    - Nome: ${userState.data.name}
+                    - Cognome: ${userState.data.surname}
+                    - Telefono: ${userState.data.phone}
+                    - Disciplina: ${userState.data.discipline}
+                    - Giorno: ${userState.data.day}
+                    - Orario: ${userState.data.time}
+                    - Data: ${userState.data.date}`);
                     await sendEmailNotification(userState.data);   
                     
                     delete userStates[chatId];
