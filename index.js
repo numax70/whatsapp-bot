@@ -475,24 +475,39 @@ function getAvailableDisciplines(schedule) {
 
 async function sendWelcomeMessage(client, recipient) {
     const logoPath = path.join(__dirname, 'logo.jpg');
+    const tableImagePath = path.join(__dirname, 'tabella.jpg'); // Immagine della tabella orari
     try {
+        // Invio del logo
         if (fs.existsSync(logoPath)) {
             const logoMedia = MessageMedia.fromFilePath(logoPath);
             await client.sendMessage(recipient, logoMedia);
         }
+
+        // Messaggio di benvenuto
         await client.sendMessage(
             recipient,
             `🎉 Benvenuto su Spazio Lotus!\n📍 Sedi:\n- Catania: Via Carmelo Patanè Romeo, 28\n- Trecastagni (CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065`
         );
+
+        // Invio della tabella orari
+        if (fs.existsSync(tableImagePath)) {
+            const tableMedia = MessageMedia.fromFilePath(tableImagePath);
+            await client.sendMessage(recipient, tableMedia);
+        } else {
+            console.error('Tabella orari non trovata.');
+        }
+
+        // Domanda per prenotazione
         const disciplines = getAvailableDisciplines(schedule).join(', ');
         await client.sendMessage(
             recipient,
-            `Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines}.\n\nScrivi il tuo messaggio seguendo questo formato:\n*disciplina, giorno, orario, data*\n\nEsempio:\nPmatwork, lunedì, 09:30, 26 gennaio`
+            `Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines}.\n\nScrivi il tuo messaggio seguendo questo formato:\n*disciplina, giorno, orario, data*\n\nEsempio:\nPILATES MATWORK, lunedì, 09:30, 26 gennaio`
         );
     } catch (error) {
         console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
     }
 }
+
 
 startBot().catch(console.error);
 
