@@ -24,7 +24,9 @@ const schedule = {
         { "time": "19:30", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
     ],
     "martedì": [
-        { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+		{ "time": "10:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+        { "time": "12:00", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+		{ "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
         { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
         { "time": "18:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -34,22 +36,27 @@ const schedule = {
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "10:30", "lessonType": "POSTURALE", "remainingSeats": 10 },
         { "time": "12:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
-        { "time": "13:30", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 }
+        { "time": "13:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
     ],
     "giovedì": [
-        { "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+	    { "time": "10:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
+        { "time": "12:00", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
+		{ "time": "13:30", "lessonType": "GIROKYNESIS", "remainingSeats": 10 },
         { "time": "15:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "16:30", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
         { "time": "18:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "19:00", "lessonType": "YOGA", "remainingSeats": 10 }
     ],
-    "venerdì": [
+	
+	"venerdì": [
+		{ "time": "13:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
         { "time": "14:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
-        { "time": "16:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
-        { "time": "17:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+        { "time": "15:00", "lessonType": "PILATES EXO CHAIR", "remainingSeats": 10 },
+        { "time": "16:15", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
+		{ "time": "17:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "19:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
-    ]
-};
+    ]};
+
 const alternativeNames = {
     "matwork": "PILATES MATWORK",
     "exo chair": "PILATES EXO CHAIR",
@@ -185,7 +192,7 @@ async function startBot() {
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: PILATES MATWORK, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
@@ -236,15 +243,15 @@ async function startBot() {
 
                 userState.step = 'confirm_booking';
                 await message.reply(`Ecco il riepilogo della tua prenotazione:
-				- Disciplina: ${userState.data.discipline}
-				- Giorno: ${userState.data.day}
-				- Orario: ${userState.data.time}
-				- Data: ${userState.data.date}
-				- Nome: ${userState.data.name}
-				- Cognome: ${userState.data.surname}
-				- Telefono: ${userState.data.phone}
+- Disciplina: ${userState.data.discipline}
+- Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
+- Data: ${userState.data.date}
+- Nome: ${userState.data.name}
+- Cognome: ${userState.data.surname}
+- Telefono: ${userState.data.phone}
 
-				Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
+Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
             case 'confirm_booking':
@@ -261,13 +268,13 @@ async function startBot() {
 
                     await sendEmailNotification(userState.data);
                     await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
-                    - Nome: ${userState.data.name}
-                    - Cognome: ${userState.data.surname}
-                    - Telefono: ${userState.data.phone}
-                    - Disciplina: ${userState.data.discipline}
-                    - Giorno: ${userState.data.day}
-                    - Orario: ${userState.data.time}
-                    - Data: ${userState.data.date}`);
+- Nome: ${userState.data.name}
+- Cognome: ${userState.data.surname}
+- Telefono: ${userState.data.phone}
+- Disciplina: ${userState.data.discipline}
+- Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
+- Data: ${userState.data.date}`);
 
                     await message.reply('Prenotazione completata con successo! ✅');
                     delete userStates[chatId];
@@ -353,10 +360,10 @@ async function sendWelcomeMessage(client, recipient) {
         await client.sendMessage(
             recipient,
             `🎉 Benvenuto su Spazio Lotus!
-			📍 Sedi:
-			- Catania: Via Carmelo Patanè Romeo, 28
-			- Trecastagni (CT): Via Luigi Capuana, 51	
-			📞 Telefono: +39 349 289 0065`
+📍 Sedi:
+- Catania: Via Carmelo Patanè Romeo, 28
+- Trecastagni (CT): Via Luigi Capuana, 51
+📞 Telefono: +39 349 289 0065`
         );
         if (fs.existsSync(tableImagePath)) {
             const tableMedia = MessageMedia.fromFilePath(tableImagePath);
@@ -365,10 +372,14 @@ async function sendWelcomeMessage(client, recipient) {
         await client.sendMessage(
             recipient,
             `Vuoi prenotare una lezione?
-			Ecco le discipline disponibili:
-			${getAvailableDisciplines(schedule).join(', ')}.
-			Scrivi il tuo messaggio seguendo questo formato: *disciplina, giorno, orario, data*
-			Esempio: matwork, lunedì, 09:30, 26 gennaio`
+Ecco le discipline disponibili:
+${getAvailableDisciplines(schedule).join(', ')}.
+
+Scrivi il tuo messaggio seguendo questo formato:
+*disciplina, giorno, orario, data*
+
+Esempio:
+PILATES MATWORK, lunedì, 09:30, 26 gennaio`
         );
     } catch (error) {
         console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
