@@ -55,7 +55,8 @@ const schedule = {
         { "time": "16:15", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
 		{ "time": "17:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "19:00", "lessonType": "FUNCTIONAL TRAINER MOVEMENT", "remainingSeats": 10 }
-    ]};
+    ]
+};
 
 const alternativeNames = {
     "matwork": "PILATES MATWORK",
@@ -112,7 +113,7 @@ async function sendEmailNotification(data) {
 
     const mailOptions = {
         from: EMAIL_USER,
-        to: 'siselcatania@gmail.com', // Sostituisci con l'email del proprietario
+        to: 'siselcatania@gmailcom', // Sostituisci con l'email del proprietario
         subject: 'Nuova Prenotazione Lezione',
         text: emailBody,
     };
@@ -141,6 +142,8 @@ async function populateDatabase() {
             if (!snapshot.exists()) {
                 await ref.set(daySchedule);
                 console.log(`Aggiunto calendario per ${formattedDate}`);
+            } else {
+                console.log(`Calendario già esistente per ${formattedDate}`);
             }
         }
     }
@@ -192,7 +195,7 @@ async function startBot() {
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: PILATES MATWORK, lunedì, 09:30, 26 gennaio');
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
@@ -256,8 +259,8 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
 
             case 'confirm_booking':
                 if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
-                    userState.step = 'ask_details';
-                    await message.reply('Reinserisci i dettagli della prenotazione nel formato: *disciplina, giorno, orario, data*.');
+                    userState.step = 'modify_booking';
+                    await message.reply('Cosa vuoi modificare? Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
                 } else if (userResponse.toLowerCase() === 'no') {
                     const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                     if (!updateResult.success) {
@@ -280,6 +283,79 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                     delete userStates[chatId];
                 } else {
                     await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
+                }
+                break;
+
+            case 'modify_booking':
+                if (['disciplina', 'giorno', 'orario', 'data', 'nome', 'cognome', 'telefono'].includes(userResponse.toLowerCase())) {
+                    userState.step = `modify_${userResponse.toLowerCase()}`;
+                    await message.reply(`Inserisci il nuovo valore per ${userResponse.toLowerCase()}.`);
+                } else {
+                    await message.reply('Modifica non valida. Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
+                }
+                break;
+
+            case 'modify_disciplina':
+                const newDiscipline = normalizeDiscipline(userResponse);
+                if (!getAvailableDisciplines(schedule).includes(newDiscipline)) {
+                    await message.reply('Disciplina non valida. Riprova.');
+                } else {
+                    userState.data.discipline = newDiscipline;
+                    userState.step = 'confirm_booking';
+                    await message.reply('Disciplina aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                }
+                break;
+
+            case 'modify_giorno':
+                userState.data.day = userResponse;
+                userState.step = 'confirm_booking';
+                await message.reply('Giorno aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                break;
+
+            case 'modify_orario':
+                userState.data.time = userResponse;
+                userState.step = 'confirm_booking';
+                await message.reply('Orario aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                break;
+
+            case 'modify_data':
+                const validatedDate = validateAndFormatDate(userResponse, schedule, userState.data.discipline, userState.data.time);
+                if (!validatedDate.isValid) {
+                    await message.reply(validatedDate.message);
+                } else {
+                    userState.data.date = validatedDate.date;
+                    userState.step = 'confirm_booking';
+                    await message.reply('Data aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                }
+                break;
+
+            case 'modify_nome':
+                if (/^[a-zA-Z\s]+$/.test(userResponse)) {
+                    userState.data.name = userResponse;
+                    userState.step = 'confirm_booking';
+                    await message.reply('Nome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                } else {
+                    await message.reply('Nome non valido. Usa solo lettere.');
+                }
+                break;
+
+            case 'modify_cognome':
+                if (/^[a-zA-Z\s]+$/.test(userResponse)) {
+                    userState.data.surname = userResponse;
+                    userState.step = 'confirm_booking';
+                    await message.reply('Cognome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                } else {
+                    await message.reply('Cognome non valido. Usa solo lettere.');
+                }
+                break;
+
+            case 'modify_telefono':
+                if (/^\d{10,15}$/.test(userResponse)) {
+                    userState.data.phone = userResponse;
+                    userState.step = 'confirm_booking';
+                    await message.reply('Telefono aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                } else {
+                    await message.reply('Telefono non valido. Inserisci un numero tra 10 e 15 cifre.');
                 }
                 break;
 
@@ -333,62 +409,31 @@ async function updateAvailableSlots(date, time) {
             if (!slots) return null;
             return slots.map(slot => {
                 if (slot.time === time) {
-                    if (slot.remainingSeats <= 0) throw new Error('Nessun posto disponibile.');
+                                        if (slot.remainingSeats <= 0) {
+                        console.error('Nessun posto disponibile per questo orario.');
+                        return slot;
+                    }
                     return { ...slot, remainingSeats: slot.remainingSeats - 1 };
                 }
                 return slot;
             });
         });
-        if (!transactionResult.committed) {
-            return { success: false };
+
+        if (transactionResult.committed) {
+            console.log(`Slot aggiornato con successo per la data ${date} e orario ${time}.`);
+            return { success: true };
+        } else {
+            return { success: false, message: 'Transazione non riuscita.' };
         }
-        return { success: true };
     } catch (error) {
-        console.error(error.message);
-        return { success: false };
-    }
-}
-
-async function sendWelcomeMessage(client, recipient) {
-    const logoPath = path.join(__dirname, 'logo.jpg');
-    const tableImagePath = path.join(__dirname, 'tabella.jpg');
-    try {
-        if (fs.existsSync(logoPath)) {
-            const logoMedia = MessageMedia.fromFilePath(logoPath);
-            await client.sendMessage(recipient, logoMedia);
-        }
-        await client.sendMessage(
-            recipient,
-            `🎉 Benvenuto su Spazio Lotus!
-📍 Sedi:
-- Catania: Via Carmelo Patanè Romeo, 28
-- Trecastagni (CT): Via Luigi Capuana, 51
-📞 Telefono: +39 349 289 0065`
-        );
-        if (fs.existsSync(tableImagePath)) {
-            const tableMedia = MessageMedia.fromFilePath(tableImagePath);
-            await client.sendMessage(recipient, tableMedia);
-        }
-        await client.sendMessage(
-            recipient,
-            `Vuoi prenotare una lezione?
-Ecco le discipline disponibili:
-${getAvailableDisciplines(schedule).join(', ')}.
-
-Scrivi il tuo messaggio seguendo questo formato:
-*disciplina, giorno, orario, data*
-
-Esempio:
-PILATES MATWORK, lunedì, 09:30, 26 gennaio`
-        );
-    } catch (error) {
-        console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
+        console.error(`Errore durante l'aggiornamento degli slot: ${error.message}`);
+        return { success: false, message: error.message };
     }
 }
 
 function normalizeDiscipline(input) {
     const normalizedInput = input.trim().toLowerCase();
-    return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
+    return alternativeNames[normalizedInput] || input;
 }
 
 function validateAndFormatDate(input, schedule, discipline, time) {
@@ -427,4 +472,21 @@ function getAvailableDisciplines(schedule) {
     return [...new Set(Object.values(schedule).flatMap(day => day.map(slot => slot.lessonType)))];
 }
 
+async function sendWelcomeMessage(client, recipient) {
+    const logoPath = path.join(__dirname, 'logo.jpg');
+    try {
+        if (fs.existsSync(logoPath)) {
+            const logoMedia = MessageMedia.fromFilePath(logoPath);
+            await client.sendMessage(recipient, logoMedia);
+        }
+        await client.sendMessage(
+            recipient,
+            `🎉 Benvenuto su Spazio Lotus!\n📍 Sedi:\n- Catania: Via Carmelo Patanè Romeo, 28\n- Trecastagni (CT): Via Luigi Capuana, 51\n📞 Telefono: +39 349 289 0065`
+        );
+    } catch (error) {
+        console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
+    }
+}
+
 startBot().catch(console.error);
+
