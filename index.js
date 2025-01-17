@@ -8,7 +8,7 @@ const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
 const os = require('os');
-const { parse, isValid, format, addDays, isSaturday, isSunday } = require('date-fns');
+const { parse, isValid, format, setYear } = require('date-fns');
 const { it } = require('date-fns/locale');
 
 const schedule = {
@@ -51,6 +51,7 @@ const schedule = {
     ]
 };
 
+
 // Variabili d'ambiente
 const OWNER_PHONE = process.env.OWNER_PHONE || '393288830885@c.us';
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -64,7 +65,7 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://your-firebase-url.firebaseio.com',
+        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
@@ -119,7 +120,12 @@ async function startBot() {
                 `Vuoi prenotare una lezione?
 Ecco le discipline disponibili:
 ${getAvailableDisciplines(schedule).join(', ')}.
-Scrivi: disciplina, giorno, orario e data per continuare.`
+
+Scrivi il tuo messaggio seguendo questo formato:
+*disciplina, giorno, orario, data*
+
+Esempio:
+PILATES MATWORK, lunedì, 09:30, 26 gennaio`
             );
         } catch (error) {
             console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
@@ -127,19 +133,35 @@ Scrivi: disciplina, giorno, orario e data per continuare.`
     }
 
     function validateAndFormatDate(input, schedule, discipline, time) {
+        if (!input) {
+            return { isValid: false, message: 'La data non è valida. Usa il formato "26 gennaio".' };
+        }
+
         const today = new Date();
-        const parsedDate = parse(input, 'dd/MM/yyyy', today, { locale: it });
+        const year = today.getFullYear();
+
+        // Aggiungi l'anno corrente alla data fornita dall'utente
+        let parsedDate;
+        try {
+            parsedDate = parse(`${input} ${year}`, 'd MMMM yyyy', today, { locale: it });
+        } catch (error) {
+            return { isValid: false, message: 'Errore nella decodifica della data. Usa il formato "26 gennaio".' };
+        }
+
         if (!isValid(parsedDate) || parsedDate < today) {
             return { isValid: false, message: 'Inserisci una data valida e futura.' };
         }
+
         const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
         if (!schedule[inputDay]) {
             return { isValid: false, message: `Non ci sono lezioni il giorno ${inputDay}.` };
         }
+
         const slot = schedule[inputDay].find(s => s.lessonType === discipline && s.time === time);
         if (!slot) {
             return { isValid: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
         }
+
         return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
     }
 
@@ -186,15 +208,23 @@ Scrivi: disciplina, giorno, orario e data per continuare.`
         switch (userState.step) {
             case 'ask_details':
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
-                if (!getAvailableDisciplines(schedule).includes(discipline)) {
-                    await message.reply('Disciplina non valida. Riprova.');
+
+                if (!discipline || !day || !time || !date) {
+                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno, orario, data* Esempio: PILATES MATWORK, lunedì, 09:30, 26 gennaio');
                     break;
                 }
+
+                if (!getAvailableDisciplines(schedule).includes(discipline)) {
+                    await message.reply('Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
+                    break;
+                }
+
                 const validation = validateAndFormatDate(date, schedule, discipline, time);
                 if (!validation.isValid) {
                     await message.reply(validation.message);
                     break;
                 }
+
                 userState.data = { discipline, day, time, date: validation.date };
                 userState.step = 'ask_name';
                 await message.reply('Inserisci il tuo nome.');
