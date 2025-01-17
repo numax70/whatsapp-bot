@@ -67,7 +67,7 @@ try {
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
-    console.error('Errore durante l'inizializzazione di Firebase:', error.message);
+    console.error('Errore durante l\'inizializzazione di Firebase:', error.message);
     process.exit(1);
 }
 
@@ -121,7 +121,7 @@ ${getAvailableDisciplines(schedule).join(', ')}.
 Scrivi: disciplina, giorno, orario e data per continuare.`
             );
         } catch (error) {
-            console.error('Errore durante l'invio del messaggio di benvenuto:', error.message);
+            console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
         }
     }
 
