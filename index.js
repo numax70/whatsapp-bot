@@ -7,6 +7,7 @@ const { Client, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
+const os = require('os');
 const { parse, isValid, format, addDays, isSaturday, isSunday } = require('date-fns');
 const { it } = require('date-fns/locale');
 
@@ -63,7 +64,7 @@ try {
             private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
         }),
-        databaseURL: 'https://whatsapp-bot-1-df029-default-rtdb.europe-west1.firebasedatabase.app',
+        databaseURL: 'https://your-firebase-url.firebaseio.com',
     });
     console.log('Firebase inizializzato correttamente.');
 } catch (error) {
@@ -236,6 +237,32 @@ Scrivi: disciplina, giorno, orario e data per continuare.`
                 break;
         }
     });
+
+    client.on('qr', qr => {
+        console.log('QR Code generato.');
+        qrcode.toFile(path.join(__dirname, 'qr.png'), qr, err => {
+            if (err) console.error('Errore nella generazione del QR Code:', err);
+        });
+    });
+
+    app.get('/qr', (req, res) => {
+        const qrPath = path.join(__dirname, 'qr.png');
+        if (fs.existsSync(qrPath)) {
+            res.sendFile(qrPath);
+        } else {
+            res.status(404).send('QR Code non trovato.');
+        }
+    });
+
+    app.get('/ping', (req, res) => {
+        console.log(`[PING] Endpoint chiamato da ${req.ip} - ${new Date().toISOString()}`);
+        res.status(200).send('OK');
+    });
+
+    setInterval(() => {
+        console.log(`RAM Utilizzata: ${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`);
+        console.log(`CPU Load (1 minuto): ${os.loadavg()[0].toFixed(2)}`);
+    }, 60000);
 
     client.on('ready', () => {
         console.log('Bot connesso a WhatsApp!');
