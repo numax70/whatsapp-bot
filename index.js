@@ -10,6 +10,7 @@ const admin = require('firebase-admin');
 const os = require('os');
 const { parse, isValid, format, addDays } = require('date-fns');
 const { it } = require('date-fns/locale');
+console.log(format(new Date(), 'd MMMM yyyy', { locale: it })); // Dovrebbe stampare "17 gennaio 2025"
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -377,38 +378,35 @@ async function startBot() {
                 }
                 case 'ask_new_date_time': {
                     const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
-            
+                
                     if (!newDate || !newTime) {
-                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*dd-MM-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
+                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*gg-mm-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
                         break;
                     }
-            
-                try {
-                    const parsedDate = parseDateInput(newDate); // Usa la funzione aggiornata
-                    const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
-            
-                    // Chiamata a checkAvailability
-                    const availability = await checkAvailability(formattedISODate, newTime, userState.data.discipline);
-            
-                    if (!availability.available) {
-                        await message.reply(`⚠️ ${availability.message}\nProva con una nuova combinazione.`);
-                        break;
+                
+                    try {
+                        // Usa la stessa funzione di validazione della data usata durante la prenotazione iniziale
+                        const validation = validateAndFormatDate(newDate, schedule, userState.data.discipline, newTime);
+                        if (!validation.isValid) {
+                            await message.reply(validation.message);
+                            break;
+                        }
+                
+                        // Aggiorna i dati utente con la nuova combinazione valida
+                        userState.data.date = validation.date;
+                        userState.data.time = newTime;
+                        userState.data.formattedDate = formatDateISOtoDDMMYYYY(validation.date);
+                
+                        userState.step = 'confirm_booking';
+                        await message.reply(`✅ La nuova combinazione è stata aggiornata con successo:\n` +
+                            `📅 *Data*: ${userState.data.formattedDate}\n⏰ *Orario*: ${newTime}\n\n` +
+                            `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
+                    } catch (error) {
+                        await message.reply('⚠️ Formato data o orario non valido. Riprova con una nuova combinazione.');
                     }
-            
-                    // Aggiorna i dati utente
-                    userState.data.date = formattedISODate;
-                    userState.data.time = newTime;
-                    userState.data.formattedDate = format(parsedDate, 'dd-MM-yyyy');
-            
-                    userState.step = 'confirm_booking';
-                    await message.reply(`✅ La nuova combinazione è stata aggiornata con successo:\n` +
-                        `📅 *Data*: ${userState.data.formattedDate}\n⏰ *Orario*: ${newTime}\n\n` +
-                        `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
-                } catch (error) {
-                    await message.reply('⚠️ La data inserita non è valida. Prova con un formato diverso, ad esempio: "26 gennaio" o "26-01-2025".');
+                    break;
                 }
-                break;
-            }
+                
             
                              
 
