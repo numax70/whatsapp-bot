@@ -76,7 +76,10 @@ const alternativeNames = {
     "GIRO": "GIROKYNESIS",
     "Kinesis": "GIROKYNESIS",
     "Yoga": "YOGA",
-    "yoga": "YOGA"
+    "yoga": "YOGA",
+    "posturale": "POSTURALE",
+    "Posturale": "POSTURALE",
+
 
 
 };
@@ -372,47 +375,42 @@ async function startBot() {
                     }
                     break;
                 }
-            case 'ask_new_date_time': {
+            ccase 'ask_new_date_time': {
                 const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
             
                 if (!newDate || !newTime) {
-                    await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*gg-mm-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
+                    await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*3 febbraio, 09:30*\nEsempio: 3 febbraio, 09:30.');
                     break;
                 }
             
-                // Convalida e riformatta la data
-                   // Convalida e parsing della data
-                    const parsedDate = parseDateInput(newDate);
-                    if (!parsedDate || parsedDate < new Date()) {
-                        await message.reply('⚠️ La data inserita non è valida o è passata. Riprova con una data futura.');
+                try {
+                    const parsedDate = parseDateInput(newDate); // Usa la funzione aggiornata
+                    const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
+            
+                    // Chiamata a checkAvailability
+                    const availability = await checkAvailability(formattedISODate, newTime, userState.data.discipline);
+            
+                    if (!availability.available) {
+                        await message.reply(`⚠️ ${availability.message}\nProva con una nuova combinazione.`);
                         break;
                     }
-
-                    const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
-
-                      
-                // Chiamata a checkAvailability
-                const availability = await checkAvailability(formattedISODate, newTime, userState.data.discipline);
             
-                // Gestione del risultato di checkAvailability
-                if (!availability.available) {
-                    await message.reply(`⚠️ ${availability.message}\nProva con una nuova combinazione.`);
-                    break;
+                    // Aggiorna i dati utente
+                    userState.data.date = formattedISODate;
+                    userState.data.time = newTime;
+                    userState.data.formattedDate = format(parsedDate, 'dd-MM-yyyy');
+            
+                    userState.step = 'confirm_booking';
+                    await message.reply(`✅ La nuova combinazione è stata aggiornata con successo:\n` +
+                        `📅 *Data*: ${userState.data.formattedDate}\n⏰ *Orario*: ${newTime}\n\n` +
+                        `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
+                } catch (error) {
+                    await message.reply(`⚠️ ${error.message}`);
                 }
-            
-                // Aggiorna i dati utente con la nuova combinazione valida
-                userState.data.date = formattedISODate;
-                userState.data.time = newTime;
-                userState.data.formattedDate = newDate; // Salva il formato dd-MM-yyyy
-            
-                userState.step = 'confirm_booking';
-                await message.reply(`✅ La nuova combinazione è stata aggiornata con successo:\n` +
-                    `📅 *Data*: ${newDate}\n⏰ *Orario*: ${newTime}\n\n` +
-                    `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                 break;
             }
             
-                    
+                             
 
             case 'modify_giorno':
                 userState.data.day = userResponse;
@@ -587,21 +585,25 @@ const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/M
  * @returns {Date|null} - Un oggetto Date valido o null se il parsing fallisce.
  */
 function parseDateInput(input) {
+    const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd MMMM yyyy', 'd MMMM'];
     const today = new Date();
-    const year = today.getFullYear(); // Usare l'anno corrente se non specificato
-    let parsedDate;
+    const year = today.getFullYear(); // Usa l'anno corrente per i formati senza anno
 
-    for (const format of acceptedFormats) {
+    for (const formatString of acceptedFormats) {
         try {
-            const dateToParse = format.includes('yyyy') ? input : `${input} ${year}`;
-            parsedDate = parse(dateToParse, format, today, { locale: it });
-            if (isValid(parsedDate)) return parsedDate;
-        } catch (err) {
-            continue; // Prova il prossimo formato
+            const dateToParse = formatString.includes('yyyy') ? input : `${input} ${year}`;
+            const parsedDate = parse(dateToParse, formatString, today, { locale: it });
+            if (isValid(parsedDate)) {
+                return parsedDate;
+            }
+        } catch (error) {
+            // Ignora gli errori di parsing per continuare con i formati successivi
         }
     }
-    return null; // Ritorna null se nessun formato è valido
+
+    throw new Error('Formato data non valido.');
 }
+
 
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
