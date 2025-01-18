@@ -375,13 +375,13 @@ async function startBot() {
                     }
                     break;
                 }
-            ccase 'ask_new_date_time': {
-                const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
+                case 'ask_new_date_time': {
+                    const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
             
-                if (!newDate || !newTime) {
-                    await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*3 febbraio, 09:30*\nEsempio: 3 febbraio, 09:30.');
-                    break;
-                }
+                    if (!newDate || !newTime) {
+                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*3 febbraio, 09:30*\nEsempio: 3 febbraio, 09:30.');
+                        break;
+                     }
             
                 try {
                     const parsedDate = parseDateInput(newDate); // Usa la funzione aggiornata
