@@ -277,18 +277,22 @@ async function startBot() {
                     userState.step = 'modify_booking';
                     await message.reply('Cosa vuoi modificare? Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
                 } else if (userResponse.toLowerCase() === 'no') {
+                    if (!userState.data || !userState.data.date || !userState.data.time || !userState.data.discipline) {
+                        await message.reply('⚠️ Si è verificato un errore con i dati della prenotazione. Riprova.');
+                        delete userStates[chatId];
+                        break;
+                    }
                     const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                     if (!updateResult.success) {
                         await message.reply('⚠️ Posti esauriti. Scegli un altro orario.');
                         userState.step = 'ask_details';
                         break;
                     }
-                    // Divide la data (formato yyyy-MM-dd) e la riformatta in gg-MM-yyyy
-                    const [year, month, day] = userState.data.date.split('-');
-                    const formattedDate = `${day}-${month}-${year}`;
+                    
+                    // Formattazione della data
+                    const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
                     userState.data.formattedDate = formattedDate; // Aggiungi la data formattata ai dati utente
-                    // Messaggio di conferma prenotazione
-                    /*  await message.reply('✅ Prenotazione completata con successo! ✅'); */
+                                      
 
                     // Invio riepilogo al cliente
                     await client.sendMessage(
@@ -316,7 +320,8 @@ async function startBot() {
                     📅 *Data*: ${formattedDate}
                     
                     🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
-                    await sendEmailNotification(userState.data);   
+                    // Invio email
+                    await sendEmailNotification({ ...userState.data, formattedDate });   
                     
                     // Messaggio di completamento al cliente
                     await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
@@ -507,6 +512,11 @@ function validateAndFormatDate(input, schedule, discipline, time) {
     }
 
     return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
+}
+
+function formatDateISOtoDDMMYYYY(isoDate) {
+    const [year, month, day] = isoDate.split('-');
+    return `${day}-${month}-${year}`;
 }
 
 function getAvailableDisciplines(schedule) {
