@@ -10,7 +10,7 @@ const admin = require('firebase-admin');
 const os = require('os');
 const { parse, isValid, format, addDays } = require('date-fns');
 const { it } = require('date-fns/locale');
-
+const formattedDate = format(parseISO(userState.data.date), 'dd-MM-yyyy');
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -119,7 +119,7 @@ async function sendEmailNotification(data) {
 🤗 Disciplina: ${data.discipline}
 📅 Giorno: ${data.day}
 ⏰ Orario: ${data.time}
-📅 Data: ${data.date}`;
+📅 Data: ${formattedDate}`;
 
     const mailOptions = {
         from: EMAIL_USER,
@@ -260,7 +260,7 @@ async function startBot() {
 🤗 Disciplina: ${userState.data.discipline}
 📅 Giorno: ${userState.data.day}
 - Orario: ${userState.data.time}
-📅 Data: ${userState.data.date}
+📅 Data: ${formattedDate}
 👤 Nome: ${userState.data.name}
 👤 Cognome: ${userState.data.surname}
 📞 Telefono: ${userState.data.phone}
@@ -291,7 +291,7 @@ async function startBot() {
                     
                     Ecco il riepilogo della tua prenotazione:
                     
-                    📅 *Data*: ${userState.data.date}
+                    📅 *Data*: ${formattedDate}
                     ⏰ *Orario*: ${userState.data.time}
                     📍 *Disciplina*: ${userState.data.discipline}
                     👤 *Nome*: ${userState.data.name} ${userState.data.surname}
@@ -307,7 +307,7 @@ async function startBot() {
                     📍 *Disciplina*: ${userState.data.discipline}
                     📆 *Giorno*: ${userState.data.day}
                     ⏰ *Orario*: ${userState.data.time}
-                    📅 *Data*: ${userState.data.date}
+                    📅 *Data*: ${formattedDate}
                     
                     🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
                     await sendEmailNotification(userState.data);   
