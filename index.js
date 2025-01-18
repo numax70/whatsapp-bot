@@ -265,7 +265,7 @@ async function startBot() {
                 await message.reply(`👩🏻 Ecco il riepilogo della tua prenotazione:
 🤗 Disciplina: ${userState.data.discipline}
 📅 Giorno: ${userState.data.day}
-- Orario: ${userState.data.time}
+⏰ Orario: ${userState.data.time}
 📅 Data: ${userState.data.formattedDate}
 👤 Nome: ${userState.data.name}
 👤 Cognome: ${userState.data.surname}
@@ -293,7 +293,9 @@ async function startBot() {
                         break;
                     }
                     
-                                                     
+                    // Riformatta la data in formato dd-MM-yyyy
+                    const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
+                    userState.data.formattedDate = formattedDate; // Aggiungi la data formattata ai dati utente                                 
 
                     // Invio riepilogo al cliente
                     await client.sendMessage(
@@ -371,6 +373,8 @@ async function startBot() {
                     await message.reply(validatedDate.message);
                 } else {
                     userState.data.date = validatedDate.date;
+                    // Riformatta la data in dd-MM-yyyy e aggiorna nel riepilogo
+                    userState.data.formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
                     userState.step = 'confirm_booking';
                     await message.reply('👩🏻 Data aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 }
