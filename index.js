@@ -379,9 +379,9 @@ async function startBot() {
                     const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
             
                     if (!newDate || !newTime) {
-                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*3 febbraio, 09:30*\nEsempio: 3 febbraio, 09:30.');
+                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*dd-MM-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
                         break;
-                     }
+                    }
             
                 try {
                     const parsedDate = parseDateInput(newDate); // Usa la funzione aggiornata
@@ -405,7 +405,7 @@ async function startBot() {
                         `📅 *Data*: ${userState.data.formattedDate}\n⏰ *Orario*: ${newTime}\n\n` +
                         `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                 } catch (error) {
-                    await message.reply(`⚠️ ${error.message}`);
+                    await message.reply('⚠️ La data inserita non è valida. Prova con un formato diverso, ad esempio: "26 gennaio" o "26-01-2025".');
                 }
                 break;
             }
@@ -587,23 +587,28 @@ const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/M
 function parseDateInput(input) {
     const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd MMMM yyyy', 'd MMMM'];
     const today = new Date();
-    const year = today.getFullYear(); // Usa l'anno corrente per i formati senza anno
+    const year = today.getFullYear(); // Usa l'anno corrente
 
     for (const formatString of acceptedFormats) {
         try {
-            // Aggiungi l'anno corrente ai formati senza anno
-            const dateToParse = formatString.includes('yyyy') ? input : `${input} ${year}`;
+            // Aggiungi manualmente l'anno corrente ai formati senza anno
+            let dateToParse = input;
+            if (formatString === 'd MMMM') {
+                dateToParse = `${input} ${year}`;
+            }
+
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
             if (isValid(parsedDate)) {
                 return parsedDate;
             }
         } catch (error) {
-            // Ignora gli errori di parsing per continuare con i formati successivi
+            // Continua con il prossimo formato
         }
     }
 
     throw new Error('Formato data non valido.');
 }
+
 
 
 
