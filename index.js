@@ -46,7 +46,7 @@ const schedule = {
         { "time": "18:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
         { "time": "19:00", "lessonType": "YOGA", "remainingSeats": 10 }
     ],
-	
+
 	"venerdì": [
 		{ "time": "13:00", "lessonType": "PILATES DANCE BARRE", "remainingSeats": 10 },
         { "time": "14:00", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -265,16 +265,16 @@ async function startBot() {
                 await message.reply(`👩🏻 Ecco il riepilogo della tua prenotazione:
 🤗 Disciplina: ${userState.data.discipline}
 📅 Giorno: ${userState.data.day}
+- Orario: ${userState.data.time}
 ⏰ Orario: ${userState.data.time}
 📅 Data: ${userState.data.formattedDate}
 👤 Nome: ${userState.data.name}
 👤 Cognome: ${userState.data.surname}
 📞 Telefono: ${userState.data.phone}
-
 👩🏻 Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
-                
+
 
             case 'confirm_booking':
                 if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
@@ -292,7 +292,8 @@ async function startBot() {
                         userState.step = 'ask_details';
                         break;
                     }
-                    
+
+                                                     
                     // Riformatta la data in formato dd-MM-yyyy
                     const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
                     userState.data.formattedDate = formattedDate; // Aggiungi la data formattata ai dati utente                                 
@@ -313,7 +314,7 @@ async function startBot() {
                     Grazie per aver scelto *Spazio Lotus*! 🌟
                     Se hai domande, non esitare a contattarci.`
                     );
-                    
+
                     await client.sendMessage(OWNER_PHONE, `📢 Nuova prenotazione ricevuta 📢
                     👤 *Cliente*: ${userState.data.name} ${userState.data.surname}
                     📞 *Telefono*: ${userState.data.phone}
@@ -325,10 +326,10 @@ async function startBot() {
                     🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
                     // Invio email
                     await sendEmailNotification(userState.data);   
-                    
+
                     // Messaggio di completamento al cliente
                     await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
-       
+
                     delete userStates[chatId];
                 } else {
                     await message.reply('👩🏻 Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
@@ -344,75 +345,16 @@ async function startBot() {
                 }
                 break;
 
-            case 'modify_disciplina':{
+            case 'modify_disciplina':
                 const newDiscipline = normalizeDiscipline(userResponse);
                 if (!getAvailableDisciplines(schedule).includes(newDiscipline)) {
-                    await message.reply('⚠️ Disciplina non valida. Riprova con una delle seguenti: ' +
-                        getAvailableDisciplines(schedule).join(', '));
+                    await message.reply('👩🏻 Disciplina non valida. Riprova.');
                 } else {
                     userState.data.discipline = newDiscipline;
-                     // Chiamata a checkAvailability per verificare la combinazione con la nuova disciplina
-                    const availability = await checkAvailability(userState.data.date, userState.data.time, newDiscipline);
-
-                    // Controlla se la combinazione attuale di data e orario è valida con la nuova disciplina
-                    const validSlot = schedule[userState.data.day]?.find(
-                        slot => slot.lessonType === newDiscipline && slot.time === userState.data.time
-                    );
-                    if (!availability.success) {
-                        userState.step = 'ask_new_date_time';
-                        await message.reply(`⚠️ La combinazione di data e orario attuale non è disponibile per la disciplina "${newDiscipline}".\n` +
-                            `Inserisci una nuova combinazione di *data e orario* nel formato:\n` +
-                            `*gg-mm-yyyy, hh:mm* (esempio: 27-01-2025, 09:30).`);
-                    } else {
-                        userState.step = 'confirm_booking';
-                        await message.reply(`✅ La disciplina è stata aggiornata con successo a: *${newDiscipline}*.\n\n` +
-                            `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
-                    }
-                    
-                }
-                   
-                    
-            }
-            break;
-                case 'ask_new_date_time': {
-                    const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
-                
-                    if (!newDate || !newTime) {
-                        await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*gg-mm-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
-                        break;
-                    }
-                
-                    // Convalida e riformatta la data
-                    const parsedDate = parse(newDate, 'dd-MM-yyyy', new Date());
-                    const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
-                    const isValidDate = isValid(parsedDate) && parsedDate >= new Date();
-                
-                    if (!isValidDate) {
-                        await message.reply('⚠️ La data inserita non è valida o è passata. Riprova con una data futura.');
-                        break;
-                    }
-                    
-                    // Chiamata a checkAvailability
-                     const availability = await checkAvailability(formattedISODate, newTime, userState.data.discipline);
-
-                    // Gestione del risultato di checkAvailability
-                    if (!availability.success) {
-                     await message.reply(availability.message);
-                    break;
-                    }
-                    
-                    // Aggiorna i dati utente con la nuova combinazione valida
-                    userState.data.date = formattedISODate;
-                    userState.data.time = newTime;
-                    userState.data.formattedDate = newDate; // Salva il formato dd-MM-yyyy
-                
                     userState.step = 'confirm_booking';
-                    await message.reply(`✅ La nuova combinazione è stata aggiornata con successo:\n` +
-                        `📅 *Data*: ${newDate}\n⏰ *Orario*: ${newTime}\n\n` +
-                        `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
-                    break;
+                    await message.reply('👩🏻 Disciplina aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 }
-                    
+                break;
 
             case 'modify_giorno':
                 userState.data.day = userResponse;
@@ -546,21 +488,6 @@ function normalizeDiscipline(input) {
     return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
 }
 
-async function checkAvailability(date, time, discipline) {
-    const ref = db.ref(`calendario/${date}`);
-    const snapshot = await ref.once('value');
-    const slots = snapshot.val();
-
-    if (!slots) return { available: false, message: 'Nessuna lezione trovata per questa data.' };
-
-    const slot = slots.find(s => s.lessonType === discipline && s.time === time);
-    if (!slot) return { available: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
-    if (slot.remainingSeats <= 0) return { available: false, message: 'Posti esauriti.' };
-
-    return { available: true };
-}
-
-
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
         return { isValid: false, message: '👩🏻 La data non è valida. L\'anno non è indispensabile, usa semplicemente il formato "26 gennaio".' };
@@ -639,4 +566,3 @@ async function sendWelcomeMessage(client, recipient) {
 
 
 startBot().catch(console.error);
-
