@@ -591,6 +591,7 @@ function parseDateInput(input) {
 
     for (const formatString of acceptedFormats) {
         try {
+            // Aggiungi l'anno corrente ai formati senza anno
             const dateToParse = formatString.includes('yyyy') ? input : `${input} ${year}`;
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
             if (isValid(parsedDate)) {
@@ -603,6 +604,7 @@ function parseDateInput(input) {
 
     throw new Error('Formato data non valido.');
 }
+
 
 
 function validateAndFormatDate(input, schedule, discipline, time) {
