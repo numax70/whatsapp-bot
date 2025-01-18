@@ -575,7 +575,7 @@ async function checkAvailability(date, time, discipline) {
     }
 }
 
-const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/MM', 'd-MM'];
+const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd MMMM yyyy', 'd MMMM'];
 /**
  * Funzione per analizzare l'input di una data e restituire un oggetto Date
  * accettando più formati.
@@ -583,7 +583,6 @@ const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/M
  * @returns {Date|null} - Un oggetto Date valido o null se il parsing fallisce.
  */
 function parseDateInput(input) {
-    const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd MMMM yyyy', 'd MMMM'];
     const today = new Date();
     const year = today.getFullYear(); // Usa l'anno corrente
 
@@ -593,19 +592,25 @@ function parseDateInput(input) {
         try {
             let dateToParse = input;
 
-            // Aggiungi manualmente l'anno corrente ai formati senza anno
+            // Gestione manuale per il formato "d MMMM"
             if (formatString === 'd MMMM') {
-                dateToParse = `${input} ${year}`;
-            }
-
-            console.log(`Provo con il formato: "${formatString}", Data: "${dateToParse}"`);
-
-            // Forza il locale italiano durante il parsing
-            const parsedDate = parse(dateToParse, formatString, today, { locale: it });
-
-            if (isValid(parsedDate)) {
-                console.log(`Data valida trovata: "${parsedDate}"`);
-                return parsedDate;
+                const match = input.match(/^(\d{1,2})\s+([a-zA-Zàèìòù]+)/); // Regex per giorno e mese
+                if (match) {
+                    const [, day, month] = match;
+                    const fullDate = `${day} ${month} ${year}`; // Aggiunge l'anno corrente
+                    const parsedDate = parse(fullDate, 'd MMMM yyyy', today, { locale: it });
+                    if (isValid(parsedDate)) {
+                        console.log(`Data valida trovata (d MMMM): "${parsedDate}"`);
+                        return parsedDate;
+                    }
+                }
+            } else {
+                console.log(`Provo con il formato: "${formatString}", Data: "${dateToParse}"`);
+                const parsedDate = parse(dateToParse, formatString, today, { locale: it });
+                if (isValid(parsedDate)) {
+                    console.log(`Data valida trovata: "${parsedDate}"`);
+                    return parsedDate;
+                }
             }
         } catch (error) {
             console.log(`Errore con il formato "${formatString}": ${error.message}`);
