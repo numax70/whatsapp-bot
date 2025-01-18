@@ -60,14 +60,23 @@ const schedule = {
 
 const alternativeNames = {
     "matwork": "PILATES MATWORK",
+    "Matwork": "PILATES MATWORK",
     "barre": "PILATES DANCE BARRE",
     "Barre": "PILATES DANCE BARRE",
     "exo chair": "PILATES EXO CHAIR",
     "exo": "PILATES EXO CHAIR",
+    "Exo": "PILATES EXO CHAIR",
     "chair": "PILATES EXO CHAIR",
+    "Chair": "PILATES EXO CHAIR",
     "functional": "FUNCTIONAL TRAINER MOVEMENT",
     "functional trainer": "FUNCTIONAL TRAINER MOVEMENT",
-    "functional trainer movement": "FUNCTIONAL TRAINER MOVEMENT"
+    "functional trainer movement": "FUNCTIONAL TRAINER MOVEMENT",
+    "Functional trainer movement": "FUNCTIONAL TRAINER MOVEMENT",
+    "Girokinesis": "GIROKYNESIS",
+    "Giro": "GIROKYNESIS",
+    "GIRO": "GIROKYNESIS",
+    "Kinesis": "GIROKYNESIS"
+
 };
 
 // Variabili d'ambiente
@@ -104,19 +113,18 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendEmailNotification(data) {
-    const emailBody = `Nuova prenotazione ricevuta:
-- Nome: ${data.name}
-- Cognome: ${data.surname}
-- Telefono: ${data.phone}
-- Disciplina: ${data.discipline}
-- Giorno: ${data.day}
-- Orario: ${data.time}
-- Data: ${data.date}`;
+    const emailBody = `🧑🏻‍💻 Nuova prenotazione ricevuta:
+👤 Nome: ${data.name} ${data.surname}
+📞 Telefono: ${data.phone}
+🤗 Disciplina: ${data.discipline}
+📅 Giorno: ${data.day}
+⏰ Orario: ${data.time}
+📅 Data: ${data.date}`;
 
     const mailOptions = {
         from: EMAIL_USER,
         to: 'siselcatania@gmail.com', // Sostituisci con l'email del proprietario
-        subject: 'Nuova Prenotazione Lezione',
+        subject: 'Nuova Richiesta di Prenotazione Lezione',
         text: emailBody,
     };
 
@@ -197,7 +205,7 @@ async function startBot() {
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
+                    await message.reply(' 👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
@@ -205,7 +213,7 @@ async function startBot() {
                 const normalizedDiscipline = normalizeDiscipline(discipline);
 
                 if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
-                    await message.reply('Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
+                    await message.reply('👩🏻 Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
                     break;
                 }
 
@@ -217,29 +225,29 @@ async function startBot() {
 
                 userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
                 userState.step = 'ask_user_info';
-                await message.reply('Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
+                await message.reply('👩🏻 Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
                 break;
 
             case 'ask_user_info':
                 const [name, surname, phone] = userResponse.split(',').map(s => s.trim());
 
                 if (!name || !surname || !phone) {
-                    await message.reply('Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
+                    await message.reply('👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
                     break;
                 }
 
                 if (!/^[a-zA-Z\s]+$/.test(name)) {
-                    await message.reply('Il nome può contenere solo lettere.');
+                    await message.reply('👩🏻 Il nome può contenere solo lettere.');
                     break;
                 }
 
                 if (!/^[a-zA-Z\s]+$/.test(surname)) {
-                    await message.reply('Il cognome può contenere solo lettere.');
+                    await message.reply('👩🏻 Il cognome può contenere solo lettere.');
                     break;
                 }
 
                 if (!/^\d{10,15}$/.test(phone)) {
-                    await message.reply('Il numero di telefono deve contenere solo cifre e avere una lunghezza tra 10 e 15 cifre.');
+                    await message.reply('👩🏻 Il numero di telefono deve contenere solo cifre e avere una lunghezza tra 10 e 15 cifre.');
                     break;
                 }
 
@@ -248,17 +256,19 @@ async function startBot() {
                 userState.data.phone = phone;
 
                 userState.step = 'confirm_booking';
-                await message.reply(`Ecco il riepilogo della tua prenotazione:
-- Disciplina: ${userState.data.discipline}
-- Giorno: ${userState.data.day}
+                await message.reply(`👩🏻 Ecco il riepilogo della tua prenotazione:
+🤗 Disciplina: ${userState.data.discipline}
+📅 Giorno: ${userState.data.day}
 - Orario: ${userState.data.time}
-- Data: ${userState.data.date}
-- Nome: ${userState.data.name}
-- Cognome: ${userState.data.surname}
-- Telefono: ${userState.data.phone}
+📅 Data: ${userState.data.date}
+👤 Nome: ${userState.data.name}
+👤 Cognome: ${userState.data.surname}
+📞 Telefono: ${userState.data.phone}
 
-Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
+👩🏻 Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 break;
+
+                
 
             case 'confirm_booking':
                 if (userResponse.toLowerCase() === 'sì' || userResponse.toLowerCase() === 'si') {
@@ -267,69 +277,80 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 } else if (userResponse.toLowerCase() === 'no') {
                     const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                     if (!updateResult.success) {
-                        await message.reply('Posti esauriti. Scegli un altro orario.');
+                        await message.reply('⚠️ Posti esauriti. Scegli un altro orario.');
                         userState.step = 'ask_details';
                         break;
                     }
                     // Messaggio di conferma prenotazione
-                     await message.reply('Prenotazione completata con successo! ✅');
+                    /*  await message.reply('✅ Prenotazione completata con successo! ✅'); */
 
                     // Invio riepilogo al cliente
-                    await client.sendMessage(chatId, `📋 *Riepilogo Prenotazione*:
-                        - Disciplina: ${userState.data.discipline}
-                        - Giorno: ${userState.data.day}
-                        - Orario: ${userState.data.time}
-                        - Data: ${userState.data.date}
-                        - Nome: ${userState.data.name}
-                        - Cognome: ${userState.data.surname}
-                        - Telefono: ${userState.data.phone}`);
+                    await client.sendMessage(
+                        chatId,
+                        `✅ *Prenotazione Completata con Successo!* ✅
                     
-                    await client.sendMessage(OWNER_PHONE, `Nuova prenotazione ricevuta:
-                    - Nome: ${userState.data.name}
-                    - Cognome: ${userState.data.surname}
-                    - Telefono: ${userState.data.phone}
-                    - Disciplina: ${userState.data.discipline}
-                    - Giorno: ${userState.data.day}
-                    - Orario: ${userState.data.time}
-                    - Data: ${userState.data.date}`);
+                    Ecco il riepilogo della tua prenotazione:
+                    
+                    📅 *Data*: ${userState.data.date}
+                    ⏰ *Orario*: ${userState.data.time}
+                    📍 *Disciplina*: ${userState.data.discipline}
+                    👤 *Nome*: ${userState.data.name} ${userState.data.surname}
+                    📞 *Telefono*: ${userState.data.phone}
+                    
+                    Grazie per aver scelto *Spazio Lotus*! 🌟
+                    Se hai domande, non esitare a contattarci.`
+                    );
+                    
+                    await client.sendMessage(OWNER_PHONE, `📢 Nuova prenotazione ricevuta 📢
+                    👤 *Cliente*: ${userState.data.name} ${userState.data.surname}
+                    📞 *Telefono*: ${userState.data.phone}
+                    📍 *Disciplina*: ${userState.data.discipline}
+                    📆 *Giorno*: ${userState.data.day}
+                    ⏰ *Orario*: ${userState.data.time}
+                    📅 *Data*: ${userState.data.date}
+                    
+                    🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
                     await sendEmailNotification(userState.data);   
                     
+                    // Messaggio di completamento al cliente
+                    await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
+       
                     delete userStates[chatId];
                 } else {
-                    await message.reply('Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
+                    await message.reply('👩🏻 Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
                 }
                 break;
 
             case 'modify_booking':
                 if (['disciplina', 'giorno', 'orario', 'data', 'nome', 'cognome', 'telefono'].includes(userResponse.toLowerCase())) {
                     userState.step = `modify_${userResponse.toLowerCase()}`;
-                    await message.reply(`Inserisci il nuovo valore per ${userResponse.toLowerCase()}.`);
+                    await message.reply(`👩🏻 Inserisci il nuovo valore per ${userResponse.toLowerCase()}.`);
                 } else {
-                    await message.reply('Modifica non valida. Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
+                    await message.reply('👩🏻 Modifica non valida. Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
                 }
                 break;
 
             case 'modify_disciplina':
                 const newDiscipline = normalizeDiscipline(userResponse);
                 if (!getAvailableDisciplines(schedule).includes(newDiscipline)) {
-                    await message.reply('Disciplina non valida. Riprova.');
+                    await message.reply('👩🏻 Disciplina non valida. Riprova.');
                 } else {
                     userState.data.discipline = newDiscipline;
                     userState.step = 'confirm_booking';
-                    await message.reply('Disciplina aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('👩🏻 Disciplina aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 }
                 break;
 
             case 'modify_giorno':
                 userState.data.day = userResponse;
                 userState.step = 'confirm_booking';
-                await message.reply('Giorno aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                await message.reply('👩🏻 Giorno aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 break;
 
             case 'modify_orario':
                 userState.data.time = userResponse;
                 userState.step = 'confirm_booking';
-                await message.reply('Orario aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                await message.reply('👩🏻 Orario aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 break;
 
             case 'modify_data':
@@ -339,7 +360,7 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 } else {
                     userState.data.date = validatedDate.date;
                     userState.step = 'confirm_booking';
-                    await message.reply('Data aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('👩🏻 Data aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 }
                 break;
 
@@ -347,9 +368,9 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 if (/^[a-zA-Z\s]+$/.test(userResponse)) {
                     userState.data.name = userResponse;
                     userState.step = 'confirm_booking';
-                    await message.reply('Nome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('👩🏻 Nome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 } else {
-                    await message.reply('Nome non valido. Usa solo lettere.');
+                    await message.reply('👩🏻 Nome non valido. Usa solo lettere.');
                 }
                 break;
 
@@ -357,9 +378,9 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 if (/^[a-zA-Z\s]+$/.test(userResponse)) {
                     userState.data.surname = userResponse;
                     userState.step = 'confirm_booking';
-                    await message.reply('Cognome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('👩🏻 Cognome aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 } else {
-                    await message.reply('Cognome non valido. Usa solo lettere.');
+                    await message.reply('👩🏻 Cognome non valido. Usa solo lettere.');
                 }
                 break;
 
@@ -367,14 +388,14 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
                 if (/^\d{10,15}$/.test(userResponse)) {
                     userState.data.phone = userResponse;
                     userState.step = 'confirm_booking';
-                    await message.reply('Telefono aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('👩🏻Telefono aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 } else {
-                    await message.reply('Telefono non valido. Inserisci un numero tra 10 e 15 cifre.');
+                    await message.reply('👩🏻 Telefono non valido. Inserisci un numero tra 10 e 15 cifre.');
                 }
                 break;
 
             default:
-                await message.reply('Si è verificato un errore. Riprova.');
+                await message.reply('👩🏻 Si è verificato un errore. Riprova.');
                 delete userStates[chatId];
         }
     });
@@ -382,7 +403,7 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
     client.on('qr', qr => {
         console.log('QR Code generato.');
         qrcode.toFile(path.join(__dirname, 'qr.png'), qr, err => {
-            if (err) console.error('Errore nella generazione del QR Code:', err);
+            if (err) console.error('👩🏻 Errore nella generazione del QR Code:', err);
         });
     });
 
@@ -406,7 +427,7 @@ Vuoi apportare modifiche? Rispondi con "Sì" o "No".`);
     }, 60000);
 
     client.on('ready', () => {
-        console.log('Bot connesso a WhatsApp!');
+        console.log('👩🏻 Bot connesso a WhatsApp!');
     });
 
     client.initialize();
@@ -424,7 +445,7 @@ async function updateAvailableSlots(date, time) {
             return slots.map(slot => {
                 if (slot.time === time) {
                                         if (slot.remainingSeats <= 0) {
-                        console.error('Nessun posto disponibile per questo orario.');
+                        console.error('👩🏻 Nessun posto disponibile per questo orario.');
                         return slot;
                     }
                     return { ...slot, remainingSeats: slot.remainingSeats - 1 };
@@ -452,7 +473,7 @@ function normalizeDiscipline(input) {
 
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
-        return { isValid: false, message: 'La data non è valida. Usa il formato "26 gennaio".' };
+        return { isValid: false, message: '👩🏻 La data non è valida. L\'anno non è indispensabile, usa semplicemente il formato "26 gennaio".' };
     }
 
     const today = new Date();
@@ -462,11 +483,11 @@ function validateAndFormatDate(input, schedule, discipline, time) {
     try {
         parsedDate = parse(`${input} ${year}`, 'd MMMM yyyy', today, { locale: it });
     } catch (error) {
-        return { isValid: false, message: 'Errore nella decodifica della data. Usa il formato "26 gennaio".' };
+        return { isValid: false, message: '👩🏻 Errore nella decodifica della data. Usa il formato "26 gennaio".' };
     }
 
     if (!isValid(parsedDate) || parsedDate < today) {
-        return { isValid: false, message: 'Inserisci una data valida e futura.' };
+        return { isValid: false, message: '👩🏻 Inserisci una data valida e successiva a quella odierna.' };
     }
 
     const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
@@ -476,7 +497,7 @@ function validateAndFormatDate(input, schedule, discipline, time) {
 
     const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
     if (!slot) {
-        return { isValid: false, message: 'Nessuna lezione disponibile per questa combinazione.' };
+        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione.' };
     }
 
     return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
@@ -514,7 +535,7 @@ async function sendWelcomeMessage(client, recipient) {
         const disciplines = getAvailableDisciplines(schedule).join(', ');
         await client.sendMessage(
             recipient,
-            `Vuoi prenotare una lezione? Ecco le discipline disponibili:\n${disciplines}.\n\nScrivi il tuo messaggio seguendo questo formato:\n*disciplina, giorno, orario, data*\n\nEsempio:\nPILATES MATWORK, lunedì, 09:30, 26 gennaio`
+            ` 👩🏻 Vuoi prenotare una lezione ? Ecco le discipline disponibili:\n${disciplines}.\n\nScrivi il tuo messaggio seguendo questo formato:\n*disciplina, giorno, orario, data*\n\nEsempio:\nPILATES MATWORK, lunedì, 09:30, 26 gennaio`
         );
     } catch (error) {
         console.error('Errore durante l\'invio del messaggio di benvenuto:', error.message);
