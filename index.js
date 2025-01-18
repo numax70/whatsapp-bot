@@ -322,7 +322,7 @@ async function startBot() {
                     
                     🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
                     // Invio email
-                    await sendEmailNotification({ ...userState.data});   
+                    await sendEmailNotification(userState.data);   
                     
                     // Messaggio di completamento al cliente
                     await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
