@@ -411,16 +411,46 @@ async function startBot() {
                              
 
             case 'modify_giorno':
-                userState.data.day = userResponse;
+                const normalizedDay = userResponse.trim().toLowerCase();
+                // Controlla se il giorno è valido
+                if (!schedule[normalizedDay]) {
+                    await message.reply(`⚠️ Il giorno "${userResponse}" non è valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
+                    Object.keys(schedule).join(', '));
+                    break;
+                }
+
+                // Aggiorna il giorno nei dati utente
+                userState.data.day = normalizedDay;
+
+                // Aggiorna il riepilogo e passa al prossimo step
                 userState.step = 'confirm_booking';
-                await message.reply('👩🏻 Giorno aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                await message.reply(`✅ Giorno aggiornato con successo a: *${userResponse}*.\n\n` +
+                `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
             case 'modify_orario':
-                userState.data.time = userResponse;
-                userState.step = 'confirm_booking';
-                await message.reply('👩🏻 Orario aggiornato. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                const newTime = userResponse.trim();
+
+                // Controlla se l'orario è valido per il giorno e la disciplina selezionati
+                const validSlot = schedule[userState.data.day]?.find(
+                slot => slot.time === newTime && slot.lessonType === userState.data.discipline
+                );
+
+                if (!validSlot) {
+                await message.reply(`⚠️ L'orario "${newTime}" non è valido o non ci sono lezioni disponibili per:\n` +
+                 `📅 Giorno: ${userState.data.day}\n📚 Disciplina: ${userState.data.discipline}.\n` +
+                `Riprova con uno degli orari disponibili.`);
                 break;
+    }
+
+    // Aggiorna l'orario nei dati utente
+    userState.data.time = newTime;
+
+    // Aggiorna il riepilogo e passa al prossimo step
+    userState.step = 'confirm_booking';
+    await message.reply(`✅ Orario aggiornato con successo a: *${newTime}*.\n\n` +
+        `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
+    break;
 
             case 'modify_data':
                 const parsedDate = parseDateInput(userResponse);
