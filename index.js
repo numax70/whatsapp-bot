@@ -257,12 +257,16 @@ async function startBot() {
                 userState.data.surname = surname;
                 userState.data.phone = phone;
 
+                // Riformatta la data e salvala
+                const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
+                userState.data.formattedDate = formattedDate;
+
                 userState.step = 'confirm_booking';
                 await message.reply(`👩🏻 Ecco il riepilogo della tua prenotazione:
 🤗 Disciplina: ${userState.data.discipline}
 📅 Giorno: ${userState.data.day}
 - Orario: ${userState.data.time}
-📅 Data: ${data.formattedDate}
+📅 Data: ${userState.data.formattedDate}
 👤 Nome: ${userState.data.name}
 👤 Cognome: ${userState.data.surname}
 📞 Telefono: ${userState.data.phone}
@@ -289,10 +293,7 @@ async function startBot() {
                         break;
                     }
                     
-                    // Formattazione della data
-                    const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
-                    userState.data.formattedDate = formattedDate; // Aggiungi la data formattata ai dati utente
-                                      
+                                                     
 
                     // Invio riepilogo al cliente
                     await client.sendMessage(
@@ -301,7 +302,7 @@ async function startBot() {
                     
                     Ecco il riepilogo della tua prenotazione:
                     
-                    📅 *Data*: ${formattedDate}
+                    📅 *Data*: ${userState.data.formattedDate}
                     ⏰ *Orario*: ${userState.data.time}
                     📍 *Disciplina*: ${userState.data.discipline}
                     👤 *Nome*: ${userState.data.name} ${userState.data.surname}
@@ -317,11 +318,11 @@ async function startBot() {
                     📍 *Disciplina*: ${userState.data.discipline}
                     📆 *Giorno*: ${userState.data.day}
                     ⏰ *Orario*: ${userState.data.time}
-                    📅 *Data*: ${formattedDate}
+                    📅 *Data*: ${userState.data.formattedDate}
                     
                     🔔 Assicurati che tutto sia pronto per accogliere il cliente!`);
                     // Invio email
-                    await sendEmailNotification({ ...userState.data, formattedDate });   
+                    await sendEmailNotification({userState.data});   
                     
                     // Messaggio di completamento al cliente
                     await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
@@ -508,7 +509,7 @@ function validateAndFormatDate(input, schedule, discipline, time) {
 
     const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
     if (!slot) {
-        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione.' };
+        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione (verifica la tabella e il giorno di calendario).' };
     }
 
     return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
