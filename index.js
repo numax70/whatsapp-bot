@@ -381,25 +381,16 @@ async function startBot() {
                 }
             
                 // Convalida e riformatta la data
-                let parsedDate;
-                try {
-                 parsedDate = parse(newDate, 'dd-MM-yyyy', new Date());
-                if (!isValid(parsedDate) || parsedDate < new Date()) {
-                    throw new Error('Data non valida o passata.');
-                }
-                } catch (error) {
-                    await message.reply('⚠️ La data inserita non è valida o è passata. Riprova con una data futura nel formato corretto.');
-                    break;
-            }
+                   // Convalida e parsing della data
+                    const parsedDate = parseDateInput(newDate);
+                    if (!parsedDate || parsedDate < new Date()) {
+                        await message.reply('⚠️ La data inserita non è valida o è passata. Riprova con una data futura.');
+                        break;
+                    }
 
-            const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
+                    const formattedISODate = format(parsedDate, 'yyyy-MM-dd');
 
-            
-                if (!isValidDate) {
-                    await message.reply('⚠️ La data inserita non è valida o è passata. Riprova con una data futura.');
-                    break;
-                }
-            
+                      
                 // Chiamata a checkAvailability
                 const availability = await checkAvailability(formattedISODate, newTime, userState.data.discipline);
             
@@ -436,16 +427,18 @@ async function startBot() {
                 break;
 
             case 'modify_data':
-                const validatedDate = validateAndFormatDate(userResponse, schedule, userState.data.discipline, userState.data.time);
-                if (!validatedDate.isValid) {
-                    await message.reply(validatedDate.message);
+                const parsedDate = parseDateInput(userResponse);
+
+                if (!parsedDate || parsedDate < new Date()) {
+                    await message.reply('⚠️ La data inserita non è valida o è passata. Usa un formato valido, ad esempio:\n' +
+                                        '*3 febbraio*, *3/02/2025*, *3-02-2025*.');
                 } else {
-                    userState.data.date = validatedDate.date;
-                    // Riformatta la data in dd-MM-yyyy e aggiorna nel riepilogo
-                    userState.data.formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
+                    userState.data.date = format(parsedDate, 'yyyy-MM-dd');
+                    userState.data.formattedDate = format(parsedDate, 'dd-MM-yyyy');
                     userState.step = 'confirm_booking';
-                    await message.reply('👩🏻 Data aggiornata. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
+                    await message.reply('✅ Data aggiornata con successo. Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".');
                 }
+                
                 break;
 
             case 'modify_nome':
@@ -555,6 +548,8 @@ function normalizeDiscipline(input) {
     return alternativeNames[normalizedInput] || Object.keys(alternativeNames).find(key => normalizedInput.includes(key)) || input;
 }
 
+
+
 async function checkAvailability(date, time, discipline) {
     if (!date || !time || !discipline) {
         return { available: false, message: '⚠️ Dati incompleti. Controlla la data, l\'orario e la disciplina.' };
@@ -584,7 +579,29 @@ async function checkAvailability(date, time, discipline) {
     }
 }
 
+const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/MM', 'd-MM'];
+/**
+ * Funzione per analizzare l'input di una data e restituire un oggetto Date
+ * accettando più formati.
+ * @param {string} input - L'input della data fornito dall'utente.
+ * @returns {Date|null} - Un oggetto Date valido o null se il parsing fallisce.
+ */
+function parseDateInput(input) {
+    const today = new Date();
+    const year = today.getFullYear(); // Usare l'anno corrente se non specificato
+    let parsedDate;
 
+    for (const format of acceptedFormats) {
+        try {
+            const dateToParse = format.includes('yyyy') ? input : `${input} ${year}`;
+            parsedDate = parse(dateToParse, format, today, { locale: it });
+            if (isValid(parsedDate)) return parsedDate;
+        } catch (err) {
+            continue; // Prova il prossimo formato
+        }
+    }
+    return null; // Ritorna null se nessun formato è valido
+}
 
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
