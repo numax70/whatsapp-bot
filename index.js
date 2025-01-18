@@ -600,7 +600,9 @@ function parseDateInput(input) {
 
             console.log(`Provo con il formato: "${formatString}", Data: "${dateToParse}"`);
 
+            // Forza il locale italiano durante il parsing
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
+
             if (isValid(parsedDate)) {
                 console.log(`Data valida trovata: "${parsedDate}"`);
                 return parsedDate;
@@ -613,7 +615,6 @@ function parseDateInput(input) {
     console.error('Formato data non valido. Input fornito:', input);
     throw new Error('Formato data non valido.');
 }
-
 
 
 
