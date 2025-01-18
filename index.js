@@ -10,7 +10,9 @@ const admin = require('firebase-admin');
 const os = require('os');
 const { parse, isValid, format, addDays } = require('date-fns');
 const { it } = require('date-fns/locale');
-const formattedDate = format(parseISO(userState.data.date), 'dd-MM-yyyy');
+// Divide la data (formato yyyy-MM-dd) e la riformatta in gg-MM-yyyy
+const [year, month, day] = userState.data.date.split('-');
+const formattedDate = `${day}-${month}-${year}`;
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
