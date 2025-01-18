@@ -10,9 +10,6 @@ const admin = require('firebase-admin');
 const os = require('os');
 const { parse, isValid, format, addDays } = require('date-fns');
 const { it } = require('date-fns/locale');
-// Divide la data (formato yyyy-MM-dd) e la riformatta in gg-MM-yyyy
-const [year, month, day] = userState.data.date.split('-');
-const formattedDate = `${day}-${month}-${year}`;
 const schedule = {
     "lunedì": [
         { "time": "09:30", "lessonType": "PILATES MATWORK", "remainingSeats": 10 },
@@ -283,6 +280,9 @@ async function startBot() {
                         userState.step = 'ask_details';
                         break;
                     }
+                    // Divide la data (formato yyyy-MM-dd) e la riformatta in gg-MM-yyyy
+                    const [year, month, day] = userState.data.date.split('-');
+                    const formattedDate = `${day}-${month}-${year}`;
                     // Messaggio di conferma prenotazione
                     /*  await message.reply('✅ Prenotazione completata con successo! ✅'); */
 
