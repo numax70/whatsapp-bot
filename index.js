@@ -589,25 +589,33 @@ function parseDateInput(input) {
     const today = new Date();
     const year = today.getFullYear(); // Usa l'anno corrente
 
+    console.log(`Tentativo di parsing della data: "${input}"`);
+
     for (const formatString of acceptedFormats) {
         try {
-            // Aggiungi manualmente l'anno corrente ai formati senza anno
             let dateToParse = input;
+
+            // Aggiungi manualmente l'anno corrente ai formati senza anno
             if (formatString === 'd MMMM') {
                 dateToParse = `${input} ${year}`;
             }
 
+            console.log(`Provo con il formato: "${formatString}", Data: "${dateToParse}"`);
+
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
             if (isValid(parsedDate)) {
+                console.log(`Data valida trovata: "${parsedDate}"`);
                 return parsedDate;
             }
         } catch (error) {
-            // Continua con il prossimo formato
+            console.log(`Errore con il formato "${formatString}": ${error.message}`);
         }
     }
 
+    console.error('Formato data non valido. Input fornito:', input);
     throw new Error('Formato data non valido.');
 }
+
 
 
 
