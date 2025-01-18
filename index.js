@@ -74,7 +74,10 @@ const alternativeNames = {
     "Girokinesis": "GIROKYNESIS",
     "Giro": "GIROKYNESIS",
     "GIRO": "GIROKYNESIS",
-    "Kinesis": "GIROKYNESIS"
+    "Kinesis": "GIROKYNESIS",
+    "Yoga": "YOGA",
+    "yoga": "YOGA"
+
 
 };
 
@@ -118,7 +121,7 @@ async function sendEmailNotification(data) {
 🤗 Disciplina: ${data.discipline}
 📅 Giorno: ${data.day}
 ⏰ Orario: ${data.time}
-📅 Data: ${formattedDate}`;
+📅 Data: ${data.formattedDate}`;
 
     const mailOptions = {
         from: EMAIL_USER,
@@ -259,7 +262,7 @@ async function startBot() {
 🤗 Disciplina: ${userState.data.discipline}
 📅 Giorno: ${userState.data.day}
 - Orario: ${userState.data.time}
-📅 Data: ${formattedDate}
+📅 Data: ${data.formattedDate}
 👤 Nome: ${userState.data.name}
 👤 Cognome: ${userState.data.surname}
 📞 Telefono: ${userState.data.phone}
@@ -283,6 +286,7 @@ async function startBot() {
                     // Divide la data (formato yyyy-MM-dd) e la riformatta in gg-MM-yyyy
                     const [year, month, day] = userState.data.date.split('-');
                     const formattedDate = `${day}-${month}-${year}`;
+                    userState.data.formattedDate = formattedDate; // Aggiungi la data formattata ai dati utente
                     // Messaggio di conferma prenotazione
                     /*  await message.reply('✅ Prenotazione completata con successo! ✅'); */
 
