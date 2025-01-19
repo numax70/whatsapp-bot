@@ -430,16 +430,31 @@ async function startBot() {
             case 'modify_giorno':
                 // Normalizza l'input dell'utente
                 const normalizedDay = userResponse.trim().toLowerCase();
+                const dayWithoutAccents = normalizedDay.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Rimuove gli accenti
 
+                // Trova il giorno corrispondente nel calendario
+                const validDay = Object.keys(schedule).find(day => {
+                const dayWithoutAccentsInSchedule = day.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return dayWithoutAccentsInSchedule === dayWithoutAccents;
+                });
                 // Controlla se il giorno è valido
-                if (!schedule[normalizedDay]) {
+               /*  if (!schedule[normalizedDay]) {
+                    await message.reply(`⚠️ Il giorno "${userResponse}" non è valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
+                        Object.keys(schedule).join(', '));
+                    break;
+                } */
+                if (!validDay) {
+                    // Se il giorno non è valido, mostra un messaggio di errore
                     await message.reply(`⚠️ Il giorno "${userResponse}" non è valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
                         Object.keys(schedule).join(', '));
                     break;
                 }
-
                 // Trova gli orari disponibili per la disciplina corrente nel giorno scelto
-                const availableTimes = schedule[normalizedDay]?.filter(slot => slot.lessonType === userState.data.discipline)
+               /*  const availableTimes = schedule[normalizedDay]?.filter(slot => slot.lessonType === userState.data.discipline)
+                    .map(slot => slot.time); */
+                
+                    // Trova gli orari disponibili per la disciplina corrente nel giorno scelto
+                    const availableTimes = schedule[validDay]?.filter(slot => slot.lessonType === userState.data.discipline)
                     .map(slot => slot.time);
 
                 if (!availableTimes || availableTimes.length === 0) {
@@ -451,11 +466,17 @@ async function startBot() {
                 }
 
                 // Se ci sono orari disponibili, aggiorna il giorno e chiedi l'orario
-                userState.data.day = normalizedDay;
+               /*  userState.data.day = normalizedDay;
                 await message.reply(`✅ Giorno aggiornato a: *${normalizedDay}*.\nEcco gli orari disponibili per "${userState.data.discipline}":\n${availableTimes.join(', ')}\n` +
+                    `Scrivi l'orario nel formato: *hh:mm* per continuare.`);
+                userState.step = 'modify_orario' */;
+
+                userState.data.day = validDay; // Usa il giorno con gli accenti corretti
+                await message.reply(`✅ Giorno aggiornato a: *${validDay}*.\nEcco gli orari disponibili per "${userState.data.discipline}":\n${availableTimes.join(', ')}\n` +
                     `Scrivi l'orario nel formato: *hh:mm* per continuare.`);
                 userState.step = 'modify_orario';
                 break;
+                
             case 'modify_orario':
                 const newTime = userResponse.trim(); // Definizione di newTime
 
