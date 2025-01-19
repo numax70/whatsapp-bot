@@ -441,11 +441,14 @@ async function startBot() {
                 break;
 
             case 'modify_orario':
-                const validSlotForTime = schedule[userState.data.day]?.find(
+                const newTime = userResponse.trim(); // Definizione di newTime
+
+                // Controlla se l'orario è valido per la combinazione attuale
+                const validSlotTwo = schedule[userState.data.day]?.find(
                     slot => slot.time === newTime && slot.lessonType === userState.data.discipline
                 );
             
-                if (!validSlotForTime) {
+                if (!validSlotTwo) {
                     await message.reply(`⚠️ L'orario "${newTime}" non è valido per "${userState.data.discipline}" il giorno "${userState.data.day}".\n` +
                         `Ecco gli orari disponibili: ` +
                         schedule[userState.data.day].filter(slot => slot.lessonType === userState.data.discipline)
@@ -453,6 +456,7 @@ async function startBot() {
                     break;
                 }
             
+                // Aggiorna i dati dell'utente
                 userState.data.time = newTime;
                 userState.step = 'confirm_booking';
                 await message.reply(`✅ Orario aggiornato con successo a: *${newTime}*.\n\n` +
