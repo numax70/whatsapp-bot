@@ -479,84 +479,86 @@ async function startBot() {
                     `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                 break;
 
-            case 'ask_new_date_time': {
-                const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
-
-                if (!newDate || !newTime) {
-                    await message.reply('⚠️ Assicurati di inserire sia la data che l\'orario nel formato:\n*gg-mm-yyyy, hh:mm*\nEsempio: 27-01-2025, 09:30.');
+                case 'ask_new_date_time': {
+                    const [newDate, newTime] = userResponse.split(',').map(s => s.trim());
+                
+                    if (!newDate || !newTime) {
+                        await message.reply('⚠️ Inserisci sia la data che l\'orario nel formato:\n*gg-mm-yyyy, hh:mm* o *3 febbraio, 09:30*.');
+                        break;
+                    }
+                
+                    let parsedDate;
+                    try {
+                        parsedDate = parseDateInput(newDate);
+                    } catch (error) {
+                        await message.reply('⚠️ Data non valida. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
+                        break;
+                    }
+                
+                    const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+                
+                    const validSlot = schedule[dayName]?.find(
+                        slot => slot.time === newTime && slot.lessonType === userState.data.discipline
+                    );
+                
+                    if (!validSlot) {
+                        await message.reply(`⚠️ Nessuna lezione trovata per "${userState.data.discipline}" il giorno "${newDate}" all'orario "${newTime}".\n` +
+                            `Prova con una nuova combinazione.`);
+                        break;
+                    }
+                
+                    userState.data.date = format(parsedDate, 'yyyy-MM-dd');
+                    userState.data.time = newTime;
+                    userState.data.day = dayName;
+                
+                    userState.step = 'confirm_booking';
+                    await message.reply(`✅ Combinazione aggiornata con successo:\n` +
+                        `📅 *Data*: ${newDate}\n⏰ *Orario*: ${newTime}.\n\n` +
+                        `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                     break;
                 }
+                
 
+
+            case 'modify_data': {
                 let parsedDate;
                 try {
-                    parsedDate = parseDateInput(newDate);
+                    parsedDate = parseDateInput(userResponse); // Decodifica la data
                 } catch (error) {
-                    await message.reply('⚠️ Data non valida. Usa il formato *gg-mm-yyyy* o *26 gennaio*.');
+                    await message.reply('⚠️ Data non valida. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
                     break;
                 }
-
-                const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-
+            
+                const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase(); // Ricava il giorno della settimana
+            
                 if (!schedule[dayName]) {
-                    await message.reply(`⚠️ Nessuna lezione prevista per il giorno "${dayName}". Riprova con un giorno valido.`);
+                    await message.reply(`⚠️ Nessuna lezione prevista per il giorno "${dayName}".\n` +
+                        `Prova con un'altra data.`);
                     break;
                 }
-
+            
                 const validSlot = schedule[dayName]?.find(
-                    slot => slot.time === newTime && slot.lessonType === userState.data.discipline
+                    slot => slot.lessonType === userState.data.discipline && slot.time === userState.data.time
                 );
-
+            
                 if (!validSlot) {
-                    await message.reply(`⚠️ Nessuna lezione trovata per "${userState.data.discipline}" il giorno "${newDate}" all'orario "${newTime}".\n` +
-                        `Prova con una nuova combinazione valida.`);
+                    await message.reply(`⚠️ Nessuna lezione valida per "${userState.data.discipline}" il giorno "${dayName}".\n` +
+                        `Inserisci una nuova combinazione di *data e orario* nel formato:\n` +
+                        `*gg-mm-yyyy, hh:mm* (esempio: 27-01-2025, 09:30).`);
+                    userState.step = 'ask_new_date_time';
                     break;
                 }
-
-                userState.data.date = format(parsedDate, 'yyyy-MM-dd');
-                userState.data.time = newTime;
+            
+                // Aggiorna la data e il giorno
+                userState.data.date = format(parsedDate, 'yyyy-MM-dd'); // ISO format per il database
                 userState.data.day = dayName;
+            
                 userState.step = 'confirm_booking';
-                await message.reply(`✅ Combinazione aggiornata con successo:\n` +
-                    `📅 *Data*: ${newDate}\n⏰ *Orario*: ${newTime}.\n\n` +
+                await message.reply(`✅ Data aggiornata con successo a: *${format(parsedDate, 'dd-MM-yyyy')}*.\n\n` +
                     `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
                 break;
             }
-
-
-            case 'modify_data':
-    let parsedDate;
-    try {
-        parsedDate = parseDateInput(userResponse);
-    } catch (error) {
-        await message.reply('⚠️ Data non valida. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
-        break;
-    }
-
-    const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-
-    if (!schedule[dayName]) {
-        await message.reply(`⚠️ Nessuna lezione prevista per il giorno "${dayName}".`);
-        break;
-    }
-
-    // Verifica se la combinazione attuale è valida
-    const validSlot = schedule[dayName]?.find(
-        slot => slot.lessonType === userState.data.discipline && slot.time === userState.data.time
-    );
-
-    if (!validSlot) {
-        userState.step = 'ask_new_date_time';
-        await message.reply(`⚠️ La combinazione attuale non è valida per "${userState.data.discipline}" il giorno "${dayName}".\n` +
-            `Inserisci una nuova combinazione di *data e orario* nel formato:\n` +
-            `*gg-mm-yyyy, hh:mm* (esempio: 27-01-2025, 09:30).`);
-    } else {
-        userState.data.date = format(parsedDate, 'yyyy-MM-dd');
-        userState.data.day = dayName;
-        userState.step = 'confirm_booking';
-        await message.reply(`✅ Data aggiornata con successo a: *${format(parsedDate, 'dd-MM-yyyy')}*.\n\n` +
-            `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
-    }
-    break;
+            
 
 
             case 'modify_nome':
@@ -708,13 +710,10 @@ function parseDateInput(input) {
     const today = new Date();
     const year = today.getFullYear();
 
-    console.log(`Tentativo di parsing della data: "${input}"`);
-
     for (const formatString of acceptedFormats) {
         try {
             let dateToParse = input;
 
-            // Gestione manuale per formati senza anno
             if (formatString === 'd MMMM') {
                 const match = input.match(/^(\d{1,2})\s+([a-zA-Zàèìòù]+)/);
                 if (match) {
@@ -724,18 +723,17 @@ function parseDateInput(input) {
             }
 
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
-            if (isValid(parsedDate) && parsedDate >= today) {
-                console.log(`Data valida trovata: "${parsedDate}"`);
+            if (isValid(parsedDate)) {
                 return parsedDate;
             }
         } catch (error) {
-            console.log(`Errore con il formato "${formatString}": ${error.message}`);
+            // Continua con il prossimo formato
         }
     }
 
-    console.error('Formato data non valido o data passata. Input fornito:', input);
-    throw new Error('Formato data non valido o data passata.');
+    throw new Error('Formato data non valido.');
 }
+
 
 
 
