@@ -358,7 +358,7 @@ async function startBot() {
             case 'modify_booking':
                 if (['disciplina', 'giorno', 'orario', 'data', 'nome', 'cognome', 'telefono'].includes(userResponse.toLowerCase())) {
                     userState.step = `modify_${userResponse.toLowerCase()}`;
-                    await message.reply(`👩🏻 Inserisci il nuovo valore per ${userResponse.toLowerCase()}.`);
+                    await message.reply(`👩🏻 Inserisci il nuovo valore per ${userResponse.toLowerCase()}. ad esempio (lunedi,martedi,mercoledi,giovedi,venerdi)`);
                 } else {
                     await message.reply('👩🏻 Modifica non valida. Scrivi: "disciplina", "giorno", "orario", "data", "nome", "cognome" o "telefono".');
                 }
