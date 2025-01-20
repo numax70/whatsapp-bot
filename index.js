@@ -226,30 +226,65 @@ async function startBot() {
         switch (userState.step) {
             case 'ask_details':
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
-
+            
+                // Verifica che tutti i campi siano stati forniti
                 if (!discipline || !day || !time || !date) {
-                    await message.reply(' 👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno della settimana, orario della lezione, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
+                    await message.reply('👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno della settimana, orario della lezione, data*.\nEsempio: matwork, lunedì, 09:30, 3 febbraio');
                     break;
                 }
-
-                //Normalizza e valida
+            
+                // Normalizza e valida la disciplina
                 const normalizedDiscipline = normalizeDiscipline(discipline);
-
                 if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
                     await message.reply('👩🏻 Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
                     break;
                 }
-
-                const validation = validateAndFormatDate(date, schedule, normalizedDiscipline, time);
-                if (!validation.isValid) {
-                    await message.reply(validation.message);
+            
+                // Normalizza e valida il giorno
+                const normalizedDay = day.trim().toLowerCase();
+                const dayWithoutAccents = normalizedDay.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Rimuove gli accenti
+                if (!schedule[dayWithoutAccents]) {
+                    await message.reply('⚠️ Giorno non valido. Inserisci uno dei seguenti: ' + Object.keys(schedule).join(', '));
                     break;
                 }
-
-                userState.data = { discipline: normalizedDiscipline, day, time, date: validation.date };
+            
+                // Valida la data fornita
+                let parsedDate;
+                try {
+                    parsedDate = parseDateInput(date); // Funzione che supporta formati come "3 febbraio" e "3/02/2025"
+                } catch (error) {
+                    await message.reply('⚠️ Errore nella decodifica della data. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
+                    break;
+                }
+            
+                // Verifica che la combinazione giorno-data-discipline-orario sia valida
+                const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+                if (dayWithoutAccents !== dayName) {
+                    await message.reply(`⚠️ La data fornita corrisponde a "${dayName}" e non al giorno "${day}". Controlla e riprova.`);
+                    break;
+                }
+            
+                const validSlot = schedule[dayWithoutAccents]?.find(slot =>
+                    slot.lessonType === normalizedDiscipline && slot.time === time
+                );
+            
+                if (!validSlot) {
+                    await message.reply(`⚠️ Nessuna lezione trovata per:\n📚 Disciplina: ${normalizedDiscipline}\n📅 Giorno: ${day}\n⏰ Orario: ${time}.\nRiprova con una combinazione valida.`);
+                    break;
+                }
+            
+                // Salva i dati nel contesto dell'utente
+                userState.data = {
+                    discipline: normalizedDiscipline,
+                    day: dayWithoutAccents,
+                    time,
+                    date: format(parsedDate, 'yyyy-MM-dd') // Salva la data in formato ISO
+                };
+            
                 userState.step = 'ask_user_info';
-                await message.reply('👩🏻 Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero* Esempio: Mario,Rossi,3479056597');
+                await message.reply('👩🏻 Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero*.\nEsempio: Mario,Rossi,3479056597');
                 break;
+            
 
             case 'ask_user_info':
                 const [name, surname, phone] = userResponse.split(',').map(s => s.trim());
@@ -518,46 +553,36 @@ async function startBot() {
                     break;
                 }
                 
+                case 'modify_data':
+                    try {
+                        const parsedDate = parseDateInput(userResponse);
+                        const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+                
+                        if (!schedule[dayName]) {
+                            await message.reply(`⚠️ Nessuna lezione prevista per il giorno "${dayName}".`);
+                            break;
+                        }
+                
+                        const validSlot = schedule[dayName]?.find(slot =>
+                            slot.lessonType === userState.data.discipline && slot.time === userState.data.time
+                        );
+                
+                        if (!validSlot) {
+                            await message.reply(`⚠️ Nessuna combinazione valida per la data "${userResponse}" e l'orario "${userState.data.time}".`);
+                            break;
+                        }
+                
+                        userState.data.date = format(parsedDate, 'yyyy-MM-dd'); // Salva in formato ISO
+                        userState.data.day = dayName; // Aggiorna il giorno
+                        userState.step = 'confirm_booking';
+                
+                        await message.reply(`✅ Data aggiornata con successo a: *${format(parsedDate, 'd MMMM yyyy')}*.\nVuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
+                    } catch (error) {
+                        await message.reply('Errore nella decodifica della data. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
+                    }
+                    break;
+                
 
-
-            case 'modify_data': {
-                let parsedDate;
-                try {
-                    parsedDate = parseDateInput(userResponse); // Decodifica la data
-                } catch (error) {
-                    await message.reply('⚠️ Data non valida. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
-                    break;
-                }
-            
-                const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase(); // Ricava il giorno della settimana
-            
-                if (!schedule[dayName]) {
-                    await message.reply(`⚠️ Nessuna lezione prevista per il giorno "${dayName}".\n` +
-                        `Prova con un'altra data.`);
-                    break;
-                }
-            
-                const validSlot = schedule[dayName]?.find(
-                    slot => slot.lessonType === userState.data.discipline && slot.time === userState.data.time
-                );
-            
-                if (!validSlot) {
-                    await message.reply(`⚠️ Nessuna lezione valida per "${userState.data.discipline}" il giorno "${dayName}".\n` +
-                        `Inserisci una nuova combinazione di *data e orario* nel formato:\n` +
-                        `*gg-mm-yyyy, hh:mm* (esempio: 27-01-2025, 09:30).`);
-                    userState.step = 'ask_new_date_time';
-                    break;
-                }
-            
-                // Aggiorna la data e il giorno
-                userState.data.date = format(parsedDate, 'yyyy-MM-dd'); // ISO format per il database
-                userState.data.day = dayName;
-            
-                userState.step = 'confirm_booking';
-                await message.reply(`✅ Data aggiornata con successo a: *${format(parsedDate, 'dd-MM-yyyy')}*.\n\n` +
-                    `Vuoi apportare altre modifiche? Rispondi con "Sì" o "No".`);
-                break;
-            }
             
 
 
@@ -699,7 +724,8 @@ async function checkAvailability(date, time, discipline) {
     }
 }
 
-const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd MMMM yyyy', 'd MMMM'];
+const acceptedFormats = ['d MMMM yyyy', 'd/MM/yyyy', 'd-MM-yyyy', 'd MMMM', 'd/MM', 'd-MM'];
+
 /**
  * Funzione per analizzare l'input di una data e restituire un oggetto Date
  * accettando più formati.
@@ -708,18 +734,15 @@ const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd 
  */
 function parseDateInput(input) {
     const today = new Date();
-    const year = today.getFullYear();
+    const year = today.getFullYear(); // Usa l'anno corrente come default
 
     for (const formatString of acceptedFormats) {
         try {
             let dateToParse = input;
 
+            // Gestione per formati senza anno (es. "3 febbraio")
             if (formatString === 'd MMMM') {
-                const match = input.match(/^(\d{1,2})\s+([a-zA-Zàèìòù]+)/);
-                if (match) {
-                    const [, day, month] = match;
-                    dateToParse = `${day} ${month} ${year}`;
-                }
+                dateToParse = `${input} ${year}`;
             }
 
             const parsedDate = parse(dateToParse, formatString, today, { locale: it });
@@ -727,12 +750,13 @@ function parseDateInput(input) {
                 return parsedDate;
             }
         } catch (error) {
-            // Continua con il prossimo formato
+            // Ignora errori di parsing per tentare altri formati
         }
     }
 
     throw new Error('Formato data non valido.');
 }
+
 
 
 
