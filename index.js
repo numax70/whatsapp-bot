@@ -307,19 +307,15 @@ async function startBot() {
                         break;
                     }
 
-                    // Controlla la validità della combinazione usando isValidCombination
-                    const dayName = format(new Date(userState.data.date), 'EEEE', { locale: it }).toLowerCase();
-                    if (!isValidCombination(schedule, dayName, userState.data.discipline, userState.data.time)) {
-                        await message.reply(`⚠️ La combinazione selezionata non è valida:\n
-                        📚 Disciplina: ${userState.data.discipline}\n
-                        📅 Giorno: ${dayName}\n
-                        ⏰ Orario: ${userState.data.time}\n
-                        Prova a modificarla.`);
-                        userState.step = 'modify_booking';
+                    // Controlla che la data sia valida e futura
+                    const today = new Date();
+                    const parsedDate = new Date(userState.data.date);
+                    if (parsedDate < today) {
+                        await message.reply('⚠️ Non puoi prenotare una data passata. Modifica la data per continuare.');
+                        userState.step = 'modify_data';
                         break;
                     }
 
-                    // Aggiorna i posti disponibili
                     const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                     if (!updateResult.success) {
                         await message.reply('⚠️ Posti esauriti. Scegli un altro orario.');
@@ -331,42 +327,27 @@ async function startBot() {
                     const formattedDate = formatDateISOtoDDMMYYYY(userState.data.date);
                     userState.data.formattedDate = formattedDate;
 
-                    // Invio riepilogo al cliente
                     await client.sendMessage(
                         chatId,
                         `✅ *Prenotazione Completata con Successo!* ✅
-            
-                        Ecco il riepilogo della tua prenotazione:
-            
-                        📅 *Data*: ${userState.data.formattedDate}
-                        ⏰ *Orario*: ${userState.data.time}
-                        📍 *Disciplina*: ${userState.data.discipline}
-                        👤 *Nome*: ${userState.data.name} ${userState.data.surname} 
-                        📞 *Telefono*: ${userState.data.phone}
-            
-                        Grazie per aver scelto *Spazio Lotus*! 🌟`
-                        );
-
-                    // Notifica al proprietario
-                    await client.sendMessage(OWNER_PHONE, `📢 Nuova prenotazione ricevuta 📢
-                    📚 *Disciplina*: ${userState.data.discipline}
-                    📅 *Data*: ${userState.data.formattedDate}
-                    📍 *Giorno*: ${dayName}
-                    ⏰ *Orario*: ${userState.data.time}
-                    👤 *Nome*: ${userState.data.name} ${userState.data.surname}
-                    📞 *Telefono*: ${userState.data.phone}`);
-
-                    // Invio email
-                    await sendEmailNotification(userState.data);
-
-                    // Messaggio di completamento al cliente
-                    await message.reply('🎉 Grazie! La tua prenotazione è stata registrata con successo.');
+                            
+                Ecco il riepilogo della tua prenotazione:
+                            
+                📅 *Data*: ${userState.data.formattedDate}
+                ⏰ *Orario*: ${userState.data.time}
+                📍 *Disciplina*: ${userState.data.discipline}
+                👤 *Nome*: ${userState.data.name} ${userState.data.surname}
+                📞 *Telefono*: ${userState.data.phone}
+                            
+                Grazie per aver scelto *Spazio Lotus*! 🌟`
+                    );
 
                     delete userStates[chatId];
                 } else {
                     await message.reply('👩🏻 Risposta non valida. Digita "Sì" per modificare o "No" per confermare.');
                 }
                 break;
+
 
 
 
@@ -739,7 +720,7 @@ const acceptedFormats = ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'd-M-yyyy', 'd 
  */
 function parseDateInput(input) {
     const today = new Date();
-    const year = today.getFullYear(); // Usa l'anno corrente
+    const year = today.getFullYear();
 
     console.log(`Tentativo di parsing della data: "${input}"`);
 
@@ -747,40 +728,34 @@ function parseDateInput(input) {
         try {
             let dateToParse = input;
 
-            // Gestione manuale per il formato "d MMMM"
             if (formatString === 'd MMMM') {
-                const match = input.match(/^(\d{1,2})\s+([a-zA-Zàèìòù]+)/); // Regex per giorno e mese
+                const match = input.match(/^(\d{1,2})\s+([a-zA-Zàèìòù]+)/);
                 if (match) {
                     const [, day, month] = match;
-                    const fullDate = `${day} ${month} ${year}`; // Aggiunge l'anno corrente
-                    const parsedDate = parse(fullDate, 'd MMMM yyyy', today, { locale: it });
-                    if (isValid(parsedDate)) {
-                        console.log(`Data valida trovata (d MMMM): "${parsedDate}"`);
-                        return parsedDate;
-                    }
+                    dateToParse = `${day} ${month} ${year}`;
                 }
-            } else {
-                console.log(`Provo con il formato: "${formatString}", Data: "${dateToParse}"`);
-                const parsedDate = parse(dateToParse, formatString, today, { locale: it });
-                if (isValid(parsedDate)) {
-                    console.log(`Data valida trovata: "${parsedDate}"`);
-                    return parsedDate;
-                }
+            }
+
+            const parsedDate = parse(dateToParse, formatString, today, { locale: it });
+            if (isValid(parsedDate) && parsedDate >= today) {
+                console.log(`Data valida trovata: "${parsedDate}"`);
+                return parsedDate;
             }
         } catch (error) {
             console.log(`Errore con il formato "${formatString}": ${error.message}`);
         }
     }
 
-    console.error('Formato data non valido. Input fornito:', input);
-    throw new Error('Formato data non valido.');
+    console.error('Formato data non valido o data passata. Input fornito:', input);
+    throw new Error('Formato data non valido o data passata.');
 }
+
 
 
 
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
-        return { isValid: false, message: '👩🏻 La data non è valida. L\'anno non è indispensabile, usa semplicemente il formato "26 gennaio".' };
+        return { isValid: false, message: '👩🏻 La data non è valida. Usa il formato "26 gennaio".' };
     }
 
     const today = new Date();
@@ -794,7 +769,7 @@ function validateAndFormatDate(input, schedule, discipline, time) {
     }
 
     if (!isValid(parsedDate) || parsedDate < today) {
-        return { isValid: false, message: '👩🏻 Inserisci una data valida e successiva a quella odierna.' };
+        return { isValid: false, message: '👩🏻 Inserisci una data valida e futura.' };
     }
 
     const inputDay = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
@@ -804,16 +779,12 @@ function validateAndFormatDate(input, schedule, discipline, time) {
 
     const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
     if (!slot) {
-        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione (controlla la tabella allegata e riprova).' };
-    }
-
-    if (!isValid(parsedDate)) {
-        return { isValid: false, message: '👩🏻 La data non è valida. Riprova con il formato corretto.' };
+        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione.' };
     }
 
     return { isValid: true, date: format(parsedDate, 'yyyy-MM-dd') };
-
 }
+
 
 function formatDateISOtoDDMMYYYY(isoDate) {
     if (!isoDate || typeof isoDate !== 'string') {
