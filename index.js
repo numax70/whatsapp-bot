@@ -243,7 +243,7 @@ async function startBot() {
         // Normalizza e valida il giorno
         const normalizedInputDay = day.trim().toLowerCase(); // Usa la dichiarazione già presente
         const dayWithoutAccentsDetails = normalizedInputDay.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Rimuove gli accenti
-        if (!schedule[dayWithoutAccents]) {
+        if (!schedule[dayWithoutAccentsDetails]) {
             await message.reply('⚠️ Giorno non valido. Inserisci uno dei seguenti: ' + Object.keys(schedule).join(', '));
             break;
         }
