@@ -130,6 +130,11 @@ function isValidDay(input) {
     return validDays.includes(normalizedInput) ? normalizedInput : null;
 }
 
+function isValidCombination(schedule, day, discipline, time) {
+    return schedule[day]?.some(slot => slot.lessonType === discipline && slot.time === time);
+}
+
+
 async function sendEmailNotification(data) {
     const emailBody = `🧑🏻‍💻 Nuova prenotazione ricevuta:
 👤 Nome: ${data.name} ${data.surname}
@@ -223,7 +228,7 @@ async function startBot() {
                 const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
 
                 if (!discipline || !day || !time || !date) {
-                    await message.reply(' 👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno, orario, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
+                    await message.reply(' 👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato:*disciplina, giorno della settimana, orario della lezione, data* Esempio: matwork, lunedì, 09:30, 26 gennaio');
                     break;
                 }
 
@@ -302,6 +307,22 @@ async function startBot() {
                         delete userStates[chatId];
                         break;
                     }
+                    // Controlla la validità della combinazione di giorno, orario, disciplina
+                    const dayName = format(new Date(userState.data.date), 'EEEE', { locale: it }).toLowerCase(); // Ottieni il giorno dal formato data
+                    const validSlot = schedule[dayName]?.find(slot => 
+                    slot.lessonType === userState.data.discipline && slot.time === userState.data.time
+                    );
+
+                     if (!validSlot) {
+                        await message.reply(`⚠️ La combinazione selezionata non è valida:\n 
+                        📚 Disciplina: ${userState.data.discipline}\n
+                        📅 Giorno: ${dayName}\n
+                        ⏰ Orario: ${userState.data.time}\n
+                        Prova a modificarla.`);
+                        userState.step = 'modify_booking';
+                        break;
+                    }
+                    // Aggiorna i posti disponibili
                     const updateResult = await updateAvailableSlots(userState.data.date, userState.data.time);
                     if (!updateResult.success) {
                         await message.reply('⚠️ Posti esauriti. Scegli un altro orario.');
@@ -402,7 +423,7 @@ async function startBot() {
 
                     await message.reply(`⚠️ La combinazione attuale non è valida per "${newDiscipline}".\n` +
                         `Ecco i giorni e orari disponibili per questa disciplina:\n${dayOptions}\n\n` +
-                        `Scrivi un altro giorno per continuare.`);
+                        `Scrivi un altro giorno (*-ad esempio: venerdi ) per continuare.`);
 
                     userState.step = 'modify_giorno';
                     break;
@@ -439,7 +460,7 @@ async function startBot() {
                 });
                 // Controlla se il giorno è valido
                /*  if (!schedule[normalizedDay]) {
-                    await message.reply(`⚠️ Il giorno "${userResponse}" non è valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
+                    await message.reply(`⚠️ La parola digitata: "${userResponse}" non è un giorno valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
                         Object.keys(schedule).join(', '));
                     break;
                 } */
@@ -476,7 +497,7 @@ async function startBot() {
                     `Scrivi l'orario nel formato: *hh:mm* per continuare.`);
                 userState.step = 'modify_orario';
                 break;
-                
+
             case 'modify_orario':
                 const newTime = userResponse.trim(); // Definizione di newTime
 
@@ -763,7 +784,6 @@ function parseDateInput(input) {
 
 
 
-
 function validateAndFormatDate(input, schedule, discipline, time) {
     if (!input) {
         return { isValid: false, message: '👩🏻 La data non è valida. L\'anno non è indispensabile, usa semplicemente il formato "26 gennaio".' };
@@ -790,7 +810,7 @@ function validateAndFormatDate(input, schedule, discipline, time) {
 
     const slot = schedule[inputDay].find(s => s.lessonType.toLowerCase() === discipline.toLowerCase() && s.time === time);
     if (!slot) {
-        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione (verifica la tabella e il giorno di calendario).' };
+        return { isValid: false, message: '👩🏻 Nessuna lezione disponibile per questa combinazione (controlla la tabella allegata e riprova).' };
     }
 
     if (!isValid(parsedDate)) {
