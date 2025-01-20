@@ -225,65 +225,66 @@ async function startBot() {
 
         switch (userState.step) {
             case 'ask_details':
-                const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
-            
-                // Verifica che tutti i campi siano stati forniti
-                if (!discipline || !day || !time || !date) {
-                    await message.reply('👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno della settimana, orario della lezione, data*.\nEsempio: matwork, lunedì, 09:30, 3 febbraio');
-                    break;
-                }
-            
-                // Normalizza e valida la disciplina
-                const normalizedDiscipline = normalizeDiscipline(discipline);
-                if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
-                    await message.reply('👩🏻 Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
-                    break;
-                }
-            
-                // Normalizza e valida il giorno
-                const normalizedDay = day.trim().toLowerCase();
-                const dayWithoutAccents = normalizedDay.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Rimuove gli accenti
-                if (!schedule[dayWithoutAccents]) {
-                    await message.reply('⚠️ Giorno non valido. Inserisci uno dei seguenti: ' + Object.keys(schedule).join(', '));
-                    break;
-                }
-            
-                // Valida la data fornita
-                let parsedDate;
-                try {
-                    parsedDate = parseDateInput(date); // Funzione che supporta formati come "3 febbraio" e "3/02/2025"
-                } catch (error) {
-                    await message.reply('⚠️ Errore nella decodifica della data. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
-                    break;
-                }
-            
-                // Verifica che la combinazione giorno-data-discipline-orario sia valida
-                const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
-                if (dayWithoutAccents !== dayName) {
-                    await message.reply(`⚠️ La data fornita corrisponde a "${dayName}" e non al giorno "${day}". Controlla e riprova.`);
-                    break;
-                }
-            
-                const validSlot = schedule[dayWithoutAccents]?.find(slot =>
-                    slot.lessonType === normalizedDiscipline && slot.time === time
-                );
-            
-                if (!validSlot) {
-                    await message.reply(`⚠️ Nessuna lezione trovata per:\n📚 Disciplina: ${normalizedDiscipline}\n📅 Giorno: ${day}\n⏰ Orario: ${time}.\nRiprova con una combinazione valida.`);
-                    break;
-                }
-            
-                // Salva i dati nel contesto dell'utente
-                userState.data = {
-                    discipline: normalizedDiscipline,
-                    day: dayWithoutAccents,
-                    time,
-                    date: format(parsedDate, 'yyyy-MM-dd') // Salva la data in formato ISO
-                };
-            
-                userState.step = 'ask_user_info';
-                await message.reply('👩🏻 Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero*.\nEsempio: Mario,Rossi,3479056597');
+            const [discipline, day, time, date] = userResponse.split(',').map(s => s.trim());
+
+            // Verifica che tutti i campi siano stati forniti
+             if (!discipline || !day || !time || !date) {
+                await message.reply('👩🏻 Assicurati di inserire tutte le informazioni richieste nel formato: *disciplina, giorno della settimana, orario della lezione, data*.\nEsempio: matwork, lunedì, 09:30, 3 febbraio');
+            break;
+            }
+
+            // Normalizza e valida la disciplina
+            const normalizedDiscipline = normalizeDiscipline(discipline);
+            if (!getAvailableDisciplines(schedule).includes(normalizedDiscipline)) {
+                await message.reply('👩🏻 Disciplina non valida. Riprova con una delle seguenti: ' + getAvailableDisciplines(schedule).join(', '));
                 break;
+             }
+
+        // Normalizza e valida il giorno
+        const normalizedInputDay = day.trim().toLowerCase(); // Usa la dichiarazione già presente
+        const dayWithoutAccentsDetails = normalizedInputDay.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Rimuove gli accenti
+        if (!schedule[dayWithoutAccents]) {
+            await message.reply('⚠️ Giorno non valido. Inserisci uno dei seguenti: ' + Object.keys(schedule).join(', '));
+            break;
+        }
+
+        // Valida la data fornita
+        let parsedDate;
+        try {
+            parsedDate = parseDateInput(date); // Funzione che supporta formati come "3 febbraio" e "3/02/2025"
+        } catch (error) {
+            await message.reply('⚠️ Errore nella decodifica della data. Usa il formato "3 febbraio" o "gg/mm/yyyy".');
+            break;
+        }
+
+        // Verifica che la combinazione giorno-data-discipline-orario sia valida
+        const dayName = format(parsedDate, 'EEEE', { locale: it }).toLowerCase();
+        if (dayWithoutAccentsDetails !== dayName) {
+            await message.reply(`⚠️ La data fornita corrisponde a "${dayName}" e non al giorno "${day}". Controlla e riprova.`);
+        break;
+        }
+
+        const validSlot = schedule[dayWithoutAccentsDetails]?.find(slot =>
+            slot.lessonType === normalizedDiscipline && slot.time === time
+        );
+
+        if (!validSlot) {
+            await message.reply(`⚠️ Nessuna lezione trovata per:\n📚 Disciplina: ${normalizedDiscipline}\n📅 Giorno: ${day}\n⏰ Orario: ${time}.\nRiprova con una combinazione valida.`);
+        break;
+        }
+
+    // Salva i dati nel contesto dell'utente
+    userState.data = {
+        discipline: normalizedDiscipline,
+        day: dayWithoutAccentsDetails,
+        time,
+        date: format(parsedDate, 'yyyy-MM-dd') // Salva la data in formato ISO
+    };
+
+    userState.step = 'ask_user_info';
+    await message.reply('👩🏻 Inserisci il tuo nome, cognome e numero di telefono nel formato: *nome,cognome,numero*.\nEsempio: Mario,Rossi,3479056597');
+    break;
+
             
 
             case 'ask_user_info':
@@ -451,12 +452,7 @@ async function startBot() {
                     const dayWithoutAccentsInSchedule = day.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     return dayWithoutAccentsInSchedule === dayWithoutAccents;
                 });
-                // Controlla se il giorno è valido
-                /*  if (!schedule[normalizedDay]) {
-                     await message.reply(`⚠️ La parola digitata: "${userResponse}" non è un giorno valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
-                         Object.keys(schedule).join(', '));
-                     break;
-                 } */
+               
                 if (!validDay) {
                     // Se il giorno non è valido, mostra un messaggio di errore
                     await message.reply(`⚠️ Il giorno "${userResponse}" non è valido o non ci sono lezioni disponibili. Riprova con uno dei seguenti giorni:\n` +
@@ -479,11 +475,7 @@ async function startBot() {
                     break;
                 }
 
-                // Se ci sono orari disponibili, aggiorna il giorno e chiedi l'orario
-               /*  userState.data.day = normalizedDay;
-                await message.reply(`✅ Giorno aggiornato a: *${normalizedDay}*.\nEcco gli orari disponibili per "${userState.data.discipline}":\n${availableTimes.join(', ')}\n` +
-                    `Scrivi l'orario nel formato: *hh:mm* per continuare.`);
-                userState.step = 'modify_orario' */;
+               
 
                 userState.data.day = validDay; // Usa il giorno con gli accenti corretti
                 await message.reply(`✅ Giorno aggiornato a: *${validDay}*.\nEcco gli orari disponibili per "${userState.data.discipline}":\n${availableTimes.join(', ')}\n` +
